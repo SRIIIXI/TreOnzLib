@@ -32,6 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "defines.h"
 #include "buffer.h"
 #include "stringex.h"
+#include "mime.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -43,13 +44,15 @@ extern "C"
         ABNF_PROTOCOL_USAGE_HTTP = 0,
         ABNF_PROTOCOL_USAGE_SIP = 1,
         ABNF_PROTOCOL_USAGE_SMTP = 2,
-        ABNF_PROTOCOL_USAGE_IMAP4 = 3
+        ABNF_PROTOCOL_USAGE_IMAP4 = 3,
+        ABNF_PROTOCOL_USAGE_UNKNOWN = 4
     }abnf_protcol_usage_t;
 
     typedef struct abnf_t abnf_t;
-    
+
     extern LIBRARY_EXPORT abnf_t *abnf_allocate();
     extern LIBRARY_EXPORT abnf_t *abnf_parse_and_allocate(string_t *data);
+    extern LIBRARY_EXPORT abnf_t *abnf_parse_and_allocate_from_headers(string_t *data);
     extern LIBRARY_EXPORT void abnf_free(abnf_t **ptr);
     extern LIBRARY_EXPORT bool abnf_is_valid(abnf_t *ptr); 
     extern LIBRARY_EXPORT string_t* abnf_serialize(abnf_t *ptr, abnf_protcol_usage_t usage);

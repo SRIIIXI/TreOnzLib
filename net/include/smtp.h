@@ -41,7 +41,7 @@ typedef struct smtp_t smtp_t;
 
 extern LIBRARY_EXPORT smtp_t* smtp_allocate(void);
 extern LIBRARY_EXPORT void smtp_free(smtp_t* ptr);
-extern LIBRARY_EXPORT void smtp_set_account_information(smtp_t* ptr, const char* hoststr, uint16_t portstr, const char* usernamestr, const char* passwordstr, security_type_t sectype);
+extern LIBRARY_EXPORT void smtp_set_account_information(smtp_t* ptr, const char* hoststr, uint16_t portstr, const char* usernamestr, const char* passwordstr, const char* emailid, security_type_t sectype);
 extern LIBRARY_EXPORT void smtp_set_public_ip_address(smtp_t* ptr, const char* ip);
 extern LIBRARY_EXPORT bool smtp_disconnect(smtp_t* ptr);
 extern LIBRARY_EXPORT bool smtp_connect(smtp_t* ptr);

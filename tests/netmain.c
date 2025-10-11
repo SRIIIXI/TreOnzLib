@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
     const char* password = "05a61dc37c019c";
     security_type_t secType = None;
 
-    smtp_set_account_information(smtp, host, port, username, password, secType);
+    smtp_set_account_information(smtp, host, port, username, password, "sriiixi@gmail.com", secType);
 
     if(!smtp_connect(smtp))
     {
@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
         smtp_free(smtp);
         return 1;
     } 
+    printf("Connected successfully\n");  
 
     if(!smtp_send_helo(smtp))
     {
@@ -64,6 +65,15 @@ int main(int argc, char* argv[])
 
     // Here you would typically prepare a mail_t object and send an email
     // For this example, we will skip that part
+
+    if(!smtp_sendmail_basic(smtp, "iot.edge.2021@gmail.com", "Test Subject", "This is a test email body."))
+    {
+        printf("Failed to send email: %s\n", smtp_get_error(smtp));
+        smtp_free(smtp);
+        return 1;
+    }
+    printf("Email sent successfully\n");
+    
 
     if(!smtp_logout(smtp))
     {

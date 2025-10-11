@@ -41,6 +41,7 @@ typedef struct smtp_t
     char host[33];
     char username[33];
     char password[33];
+    char emailid[33];
     uint16_t port;
     bool start_tls;
     const char* public_ip_address;
@@ -103,7 +104,7 @@ void smtp_free(smtp_t* ptr)
     }
 }
 
-void smtp_set_account_information(smtp_t* ptr, const char* hoststr, uint16_t portstr, const char* usernamestr, const char* passwordstr, security_type_t sectype)
+void smtp_set_account_information(smtp_t* ptr, const char* hoststr, uint16_t portstr, const char* usernamestr, const char* passwordstr, const char* emailid, security_type_t sectype)
 {
     if (ptr == NULL)
     {
@@ -116,6 +117,8 @@ void smtp_set_account_information(smtp_t* ptr, const char* hoststr, uint16_t por
     ptr->username[32] = 0;
     strncpy(ptr->password, passwordstr, 32);
     ptr->password[32] = 0;
+    strncpy(ptr->emailid, emailid, 32);
+    ptr->emailid[32] = 0;
     ptr->port = portstr;
     ptr->securityType = sectype;
 }
@@ -166,6 +169,20 @@ bool smtp_connect(smtp_t* ptr)
     string_t* rx_buffer = NULL;
 
     rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
+
+    if(!rx_buffer)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to receive greeting from server");
+        tcp_client_close_socket(ptr->bearer);
+        tcp_client_free(ptr->bearer);
+        ptr->bearer = NULL;
+        return false;
+    }
+    else
+    {
+        printf("%s\n", string_c_str(rx_buffer)); // For debugging
+    }
+    
     string_free(&rx_buffer);
 
     return true;
@@ -213,7 +230,19 @@ bool smtp_send_helo(smtp_t* ptr)
 
     while(true)
     {
-        rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
+        rx_buffer = tcp_client_receive_string_precise(ptr->bearer, "\r\n");
+
+        if(!rx_buffer)
+        {
+            snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to receive EHLO response");
+            string_free(&eof_response);
+            string_free(&tls_support);
+            return false;
+        }
+        else
+        {
+            printf("%s\n", string_c_str(rx_buffer)); // For debugging
+        }
 
         if(string_index_of_substr(rx_buffer, tls_support) >= 0)
         {
@@ -339,8 +368,72 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     // Code for VRFY --- FOR FUTURE
 
     // Code for DATA
+    memset(tx_temp, 0, sizeof(tx_temp));
+	sprintf(tx_temp, "DATA");
+
+    tx_buffer = string_allocate(tx_temp);
+
+    if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send RCPT TO");
+        string_free(&tx_buffer);
+        return false;
+    }
+    string_free(&tx_buffer);
+    tx_buffer = NULL;
+
+    rx_buffer = NULL;
+    respcode = string_allocate("354");
+
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
+
+    if (string_index_of_substr(rx_buffer, respcode) < 0) 
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "DATA not accepted");
+        if (rx_buffer)
+        {
+            string_free(&rx_buffer);
+        }
+        return false;
+    }
+
+    string_free(&rx_buffer);
+    string_free(&respcode);
+    rx_buffer = NULL;
+    respcode = NULL;
     // Code for DATA
 
+    // Code for sending actual message body
+    memset(tx_temp, 0, sizeof(tx_temp));
+    sprintf(tx_temp, "From: %S\r\nTo: %s\r\nSubject: %s\r\n\r\n%s\r\n.\r\n", ptr->emailid, recipient, subject, plaintext_message);
+
+
+    tx_buffer = string_allocate(tx_temp);   
+    if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send message body");
+        string_free(&tx_buffer);
+        return false;
+    }
+    string_free(&tx_buffer);
+    tx_buffer = NULL;
+    rx_buffer = NULL;
+
+    respcode = string_allocate("250");      
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
+    if (string_index_of_substr(rx_buffer, respcode) < 0)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Message body not accepted");
+        if (rx_buffer)
+        {
+            string_free(&rx_buffer);
+        }
+        return false;
+    }   
+    string_free(&rx_buffer);
+    string_free(&respcode);
+    rx_buffer = NULL;
+    respcode = NULL;
 
     return true;
 }
@@ -767,5 +860,9 @@ bool smtp_resolve_public_ip_address()
     tcp_client_close_socket(http_client);
     tcp_client_free(http_client);
     buffer_free(&rx_buffer);
+
+    // TEST CODE
+    printf("Public IP Address: %s\n", selfIp);
+
     return true;
 }
