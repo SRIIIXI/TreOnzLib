@@ -1503,20 +1503,23 @@ string_t* string_internal_adjust_storage(string_t* string_ptr, size_t sz)
         }
     }
     // Shrink if wasting more than 2 pages
-    else if(string_ptr->memory_size > new_memory_size + (2 * psize))
+    else 
     {
-        void* ptr = (char*)calloc(new_memory_size, sizeof(char));
-        if(ptr)
+        if(string_ptr->memory_size > new_memory_size + (2 * psize))
         {
-            // Copy existing data
-            for(size_t i = 0; i < string_ptr->data_size; i++)
+            void* ptr = (char*)calloc(new_memory_size, sizeof(char));
+            if(ptr)
             {
-                ((char*)ptr)[i] = string_ptr->data[i];
+                // Copy existing data
+                for(size_t i = 0; i < string_ptr->data_size; i++)
+                {
+                    ((char*)ptr)[i] = string_ptr->data[i];
+                }
+                
+                free(string_ptr->data);
+                string_ptr->data = ptr;
+                string_ptr->memory_size = new_memory_size;
             }
-            
-            free(string_ptr->data);
-            string_ptr->data = ptr;
-            string_ptr->memory_size = new_memory_size;
         }
     }
 

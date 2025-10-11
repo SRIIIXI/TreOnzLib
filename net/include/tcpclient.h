@@ -45,6 +45,7 @@ extern "C"
   extern LIBRARY_EXPORT void tcp_client_free(tcp_client_t *ptr);
   extern LIBRARY_EXPORT bool tcp_client_create_socket(tcp_client_t *ptr, const char *servername, int serverport);
   extern LIBRARY_EXPORT bool tcp_client_connect_socket(tcp_client_t *ptr);
+  extern LIBRARY_EXPORT bool tcp_client_switch_to_tls(tcp_client_t *ptr);
   extern LIBRARY_EXPORT bool tcp_client_close_socket(tcp_client_t *ptr);
   extern LIBRARY_EXPORT bool tcp_client_is_connected(tcp_client_t *ptr);
 

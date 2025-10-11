@@ -46,6 +46,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 const int INVALID_SOCKET = -1;
 const int SOCKET_ERROR = -1;
 
+#define MAX_TCP_CLIENT_BUFFER_SIZE 512
+
 #pragma pack(1)
 typedef struct tcp_client_t
 {
@@ -285,21 +287,43 @@ buffer_t* tcp_client_receive_buffer_by_length(tcp_client_t* ptr, size_t len)
     }
 
     iobuffer = buffer_allocate_default();
+    size_t totalbytes = 0;
 
     while(true)
     {
-        char byte[2] = {0};
+        char bytes[MAX_TCP_CLIENT_BUFFER_SIZE] = {0};
         ssize_t	bytesread = 0;
 
-        bytesread = (ssize_t)recv(ptr->socket, &byte[0], 1, 0);
-        
+        bytesread = (ssize_t)recv(ptr->socket, &bytes[0], MAX_TCP_CLIENT_BUFFER_SIZE, 0);
+        totalbytes += bytesread;
+      
         // Connection closed gracefully or error or link down
         // Both cases we have to return
         if (bytesread == 0 || bytesread < 0)
         {
             ptr->error_code = SOCKET_ERROR;
             ptr->connected = false;
+            buffer_free(&iobuffer);
             return NULL;
+        }
+
+        buffer_append(iobuffer, &bytes[0], (size_t)bytesread);
+
+        //ATleast we have read so much data that the delimeter can be present
+        if(totalbytes >= delimeterlen)
+        {
+            const char* read_buffer = buffer_get_data(iobuffer);
+            const char* comparison_segment = &read_buffer[totalbytes - delimeterlen];
+
+            if(memcmp(comparison_segment, delimeter, delimeterlen) == 0)
+            {
+                // We have found the delimeter
+                // Caller will call with explict knowledge that delimeter will be at the end, thererore no nmore bytes after this in the socket
+                // We just need to trim the delimeter from the end
+                size_t new_size = totalbytes - delimeterlen;
+                buffer_remove_end(iobuffer, delimeterlen);
+                break;
+            }
         }
     }
 
@@ -322,10 +346,10 @@ string_t* tcp_client_receive_string(tcp_client_t* ptr, const char* delimeter)
 
     while(true)
     {
-        char byte[2] = {0};
+        char bytes[MAX_TCP_CLIENT_BUFFER_SIZE+1] = {0};
         ssize_t	bytesread = 0;
 
-        bytesread = (ssize_t)recv(ptr->socket, &byte[0], 1, 0);
+        bytesread = (ssize_t)recv(ptr->socket, &bytes[0], MAX_TCP_CLIENT_BUFFER_SIZE, 0);
         totalbytes += bytesread;
         
         // Connection closed gracefully or error or link down
@@ -334,17 +358,27 @@ string_t* tcp_client_receive_string(tcp_client_t* ptr, const char* delimeter)
         {
             ptr->error_code = SOCKET_ERROR;
             ptr->connected = false;
+            string_free(&iostr);
             return NULL;
         }
 
-        string_append_char(iostr, byte[0]);
+        string_append(iostr, &bytes[0]);
 
+        //ATleast we have read so much data that the delimeter can be present
         if(totalbytes >= delimeterlen)
         {
-            const char* comp_seg = string_c_str(iostr);
+            const char* read_buffer = string_c_str(iostr);
+            const char* comparison_segment = &read_buffer[totalbytes - delimeterlen];
 
-            if(strstr(comp_seg, delimeter) != 0)
+            if(memcmp(comparison_segment, delimeter, delimeterlen) == 0)
             {
+                // We have found the delimeter
+                // Caller will call with explict knowledge that delimeter will be at the end, thererore no nmore bytes after this in the socket
+                // As this is a string, we can trim the delimeter from the end
+                size_t new_size = totalbytes - delimeterlen;
+                // Just remove the delimeter from the end   
+                string_remove_end(iostr, delimeterlen);
+                // Ensure null termination  
                 break;
             }
         }
