@@ -161,6 +161,11 @@ bool tcp_client_connect_socket(tcp_client_t* ptr)
 	return true;
 }
 
+bool tcp_client_switch_to_tls(tcp_client_t *ptr)
+{
+    return true;
+}
+
 bool tcp_client_close_socket(tcp_client_t* ptr)
 {
     if(!ptr)

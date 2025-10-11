@@ -1,7 +1,7 @@
 /*
 BSD 2-Clause License
 
-Copyright (c) 2017, Subrato Roy (subratoroy@hotmail.com)
+Copyright (c) 2025, Subrato Roy (subratoroy@hotmail.com)
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -26,49 +26,44 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef TINYXML_C_H
-#define TINYXML_C_H
+#ifndef MQTT_C
+#define MQTT_C
+
+#include "defines.h"
+#include "buffer.h"
+#include "stringex.h"
+#include "tcpclient.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/* Node types */
-typedef enum
-{
-    XML_NODE_DOCUMENT,
-    XML_NODE_ELEMENT,
-    XML_NODE_TEXT,
-    XML_NODE_CDATA,
-    XML_NODE_COMMENT
-} xml_node_type_t;
+typedef struct mqtt_client_t mqtt_client_t;
 
-/* Forward declarations */
-typedef struct xml_node_t xml_node_t;
-typedef struct xml_document_t xml_document_t;
+typedef void (*mqtt_message_callback_t)(const string_t* topic, const buffer_t* payload, void* userdata);
 
-/* Document management */
-xml_document_t *xml_parse_string(const char *input);
-xml_document_t *xml_load_file(const char *path);
-void xml_free_document(xml_document_t *doc);
+/* Client lifecycle */
+extern LIBRARY_EXPORT mqtt_client_t* mqtt_client_allocate(const char* client_id);
+extern LIBRARY_EXPORT void mqtt_client_free(mqtt_client_t** client);
 
-/* Node navigation */
-xml_node_t *xml_node_first_child_element(xml_node_t *node, const char *name);
-xml_node_t *xml_node_next_sibling_element(xml_node_t *node, const char *name);
-xml_node_t *xml_node_parent(xml_node_t *node);
+/* Connection */
+extern LIBRARY_EXPORT bool mqtt_client_connect(mqtt_client_t* client, const char* host, int port, bool use_tls, int keepalive_seconds);
+extern LIBRARY_EXPORT bool mqtt_client_disconnect(mqtt_client_t* client);
+extern LIBRARY_EXPORT bool mqtt_client_is_connected(mqtt_client_t* client);
 
-/* Node info */
-xml_node_type_t xml_node_type(xml_node_t *node);
-const char *xml_node_name(xml_node_t *node);
-const char *xml_node_get_attr(xml_node_t *node, const char *name);
-const char *xml_node_get_text(xml_node_t *node);
+/* Publish */
+extern LIBRARY_EXPORT bool mqtt_client_publish(mqtt_client_t* client, const char* topic, const buffer_t* payload, uint8_t qos, bool retain);
 
-/* Debugging / output */
-void xml_print_node(xml_node_t *node, int indent);
+/* Subscribe */
+extern LIBRARY_EXPORT bool mqtt_client_subscribe(mqtt_client_t* client, const char* topic, mqtt_message_callback_t callback, void* userdata);
+extern LIBRARY_EXPORT bool mqtt_client_unsubscribe(mqtt_client_t* client, const char* topic);
+
+/* Event loop / processing */
+extern LIBRARY_EXPORT void mqtt_client_loop(mqtt_client_t* client, int timeout_ms);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* TINYXML_C_H */
-
+#endif
