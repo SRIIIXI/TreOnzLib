@@ -27,7 +27,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #ifndef TCP_CLIENT_C
-#define RESPONDTCP_CLIENT_CER_C
+#define TCP_CLIENT_C
 
 #include "defines.h"
 #include "buffer.h"
@@ -54,7 +54,9 @@ extern "C"
 
   extern LIBRARY_EXPORT buffer_t* tcp_client_receive_buffer_by_length(tcp_client_t *ptr, size_t len);
   extern LIBRARY_EXPORT buffer_t* tcp_client_receive_buffer_by_delimeter(tcp_client_t *ptr, const char *delimeter, size_t delimeterlen);
-  extern LIBRARY_EXPORT string_t* tcp_client_receive_string(tcp_client_t *ptr, const char *delimeter);
+
+  extern LIBRARY_EXPORT string_t* tcp_client_receive_string_chunked(tcp_client_t *ptr, const char *delimeter);
+  extern LIBRARY_EXPORT string_t* tcp_client_receive_string_precise(tcp_client_t *ptr, const char *delimeter);
 
   extern LIBRARY_EXPORT socket_t tcp_client_get_socket(tcp_client_t *ptr);
   extern LIBRARY_EXPORT int tcp_client_get_error_code(tcp_client_t *ptr);

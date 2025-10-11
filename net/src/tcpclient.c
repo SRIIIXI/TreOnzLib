@@ -330,7 +330,7 @@ buffer_t* tcp_client_receive_buffer_by_length(tcp_client_t* ptr, size_t len)
     return iobuffer;
  }
 
-string_t* tcp_client_receive_string(tcp_client_t* ptr, const char* delimeter)
+string_t* tcp_client_receive_string_chunked(tcp_client_t* ptr, const char* delimeter)
 {
     string_t* iostr = NULL;
 
@@ -363,6 +363,63 @@ string_t* tcp_client_receive_string(tcp_client_t* ptr, const char* delimeter)
         }
 
         string_append(iostr, &bytes[0]);
+
+        //ATleast we have read so much data that the delimeter can be present
+        if(totalbytes >= delimeterlen)
+        {
+            const char* read_buffer = string_c_str(iostr);
+            const char* comparison_segment = &read_buffer[totalbytes - delimeterlen];
+
+            if(memcmp(comparison_segment, delimeter, delimeterlen) == 0)
+            {
+                // We have found the delimeter
+                // Caller will call with explict knowledge that delimeter will be at the end, thererore no nmore bytes after this in the socket
+                // As this is a string, we can trim the delimeter from the end
+                size_t new_size = totalbytes - delimeterlen;
+                // Just remove the delimeter from the end   
+                string_remove_end(iostr, delimeterlen);
+                // Ensure null termination  
+                break;
+            }
+        }
+    }
+
+    return iostr;
+}
+
+string_t* tcp_client_receive_string_precise(tcp_client_t* ptr, const char* delimeter)
+{
+    string_t* iostr = NULL;
+
+    if(!ptr)
+    {
+        return  NULL;
+    }
+
+    iostr = string_allocate_default();
+
+    size_t delimeterlen = strlen(delimeter);
+    size_t totalbytes = 0;
+
+    while(true)
+    {
+        char byte;
+        ssize_t	bytesread = 0;
+
+        bytesread = (ssize_t)recv(ptr->socket, &byte, 1, 0);
+        totalbytes += bytesread;
+        
+        // Connection closed gracefully or error or link down
+        // Both cases we have to return
+        if (bytesread == 0 || bytesread < 0)
+        {
+            ptr->error_code = SOCKET_ERROR;
+            ptr->connected = false;
+            string_free(&iostr);
+            return NULL;
+        }
+
+        string_append_char(iostr, byte);
 
         //ATleast we have read so much data that the delimeter can be present
         if(totalbytes >= delimeterlen)

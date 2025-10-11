@@ -165,7 +165,7 @@ bool smtp_connect(smtp_t* ptr)
 
     string_t* rx_buffer = NULL;
 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
     string_free(&rx_buffer);
 
     return true;
@@ -213,7 +213,7 @@ bool smtp_send_helo(smtp_t* ptr)
 
     while(true)
     {
-        rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+        rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
         if(string_index_of_substr(rx_buffer, tls_support) >= 0)
         {
@@ -282,7 +282,7 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     rx_buffer = NULL;
     respcode = string_allocate("334");
 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
     if (string_index_of_substr(rx_buffer, respcode) < 0) 
     {
@@ -318,7 +318,7 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     rx_buffer = NULL;
     respcode = string_allocate("334");
 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
     if (string_index_of_substr(rx_buffer, respcode) < 0) 
     {
@@ -505,7 +505,7 @@ bool smtp_login(smtp_t* ptr)
     string_free(&tx_buffer);
     tx_buffer = NULL;
 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
     if (!rx_buffer) 
     {
@@ -549,7 +549,7 @@ bool smtp_login(smtp_t* ptr)
     string_free(&tx_buffer);
     tx_buffer = NULL;
 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
     if (!rx_buffer) 
     {
@@ -591,7 +591,7 @@ bool smtp_login(smtp_t* ptr)
     string_free(&tx_buffer);
     tx_buffer = NULL;
 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
     if (!rx_buffer) 
     {
@@ -631,7 +631,7 @@ bool smtp_logout(smtp_t* ptr)
     tcp_client_send_string(ptr->bearer, tx_buffer);
 
     string_t* rx_buffer = NULL; 
-    rx_buffer = tcp_client_receive_string(ptr->bearer, "\r\n");
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
     string_t *resp = NULL;
 
@@ -706,7 +706,7 @@ bool smtp_resolve_public_ip_address()
     string_t* rx_string = NULL;
 
     // This call reads the HTTP headers
-    rx_string = tcp_client_receive_string(http_client, "\r\n\r\n");
+    rx_string = tcp_client_receive_string_precise(http_client, "\r\n\r\n");
 
     if(rx_string == NULL)
     {
