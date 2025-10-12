@@ -63,6 +63,7 @@ typedef struct hal_device_info_t{
     uint32_t capabilities;       // bitmask of HAL_CAP_*
     void *metadata;              // optional vendor-specific info
     hal_device_id_t device_id;  // unique ID assigned by HAL
+    uint32_t device_class;    // device class (e.g., USB class)
 } hal_device_info_t;
 
 // Callback type for I/O events

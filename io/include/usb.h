@@ -25,4 +25,28 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
- 
+
+#ifndef USB_H
+#define USB_H
+
+#include "defines.h"
+#include "haltypes.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern LIBRARY_EXPORT bool usb_init(void);
+extern LIBRARY_EXPORT bool usb_enumerate(hal_device_info_t *list, size_t *count);
+extern LIBRARY_EXPORT bool usb_read(hal_device_id_t device_id, void *buffer, size_t size, int timeout_ms);
+extern LIBRARY_EXPORT bool usb_write(hal_device_id_t device_id, const void *buffer, size_t size, int timeout_ms);
+extern LIBRARY_EXPORT bool usb_get_state(hal_device_id_t device_id, void *state, size_t size);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // USB_H
