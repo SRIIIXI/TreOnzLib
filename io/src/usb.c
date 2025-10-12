@@ -227,7 +227,7 @@ bool usb_enumerate(hal_device_info_t *list, size_t *count)
 // Open USB device internally
 // -----------------------------------------------------------------------------
 
-static bool usb_open(hal_device_id_t device_id)
+bool usb_open(hal_device_id_t device_id)
 {
     if (device_id >= usb_device_count)
         return false;
@@ -241,6 +241,20 @@ static bool usb_open(hal_device_id_t device_id)
 
     usb_devices[device_id].fd = fd;
     usb_devices[device_id].opened = true;
+    return true;
+}
+
+bool usb_close(hal_device_id_t device_id)
+{
+    if (device_id >= usb_device_count)
+        return false;
+
+    if (!usb_devices[device_id].opened)
+        return true;
+
+    close(usb_devices[device_id].fd);
+    usb_devices[device_id].fd = -1;
+    usb_devices[device_id].opened = false;
     return true;
 }
 

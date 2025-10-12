@@ -41,6 +41,8 @@ extern "C" {
 
 extern LIBRARY_EXPORT bool usb_init(void);
 extern LIBRARY_EXPORT bool usb_enumerate(hal_device_info_t *list, size_t *count);
+extern LIBRARY_EXPORT bool usb_open(hal_device_id_t device_id);
+extern LIBRARY_EXPORT bool usb_close(hal_device_id_t device_id);
 extern LIBRARY_EXPORT bool usb_read(hal_device_id_t device_id, void *buffer, size_t size, int timeout_ms);
 extern LIBRARY_EXPORT bool usb_write(hal_device_id_t device_id, const void *buffer, size_t size, int timeout_ms);
 extern LIBRARY_EXPORT bool usb_get_state(hal_device_id_t device_id, void *state, size_t size);
