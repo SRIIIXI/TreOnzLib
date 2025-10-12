@@ -1,3 +1,4 @@
+
 /*
 BSD 2-Clause License
 
@@ -26,8 +27,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef ADC_H
-#define ADC_H
+#ifndef DAC_H
+#define DAC_H
 
 #include "defines.h"
 #include "haltypes.h"
@@ -37,16 +38,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern "C" {
 #endif
 
-extern LIBRARY_EXPORT bool adc_init(void);
-extern LIBRARY_EXPORT bool adc_enumerate(hal_device_info_t *list, size_t *count);
-extern LIBRARY_EXPORT bool adc_read(hal_device_id_t device_id, void *value, size_t size); // read single value
-extern LIBRARY_EXPORT bool adc_read_array(hal_device_id_t device_id, void *buffer, size_t count, size_t size); // multiple samples
-extern LIBRARY_EXPORT bool adc_get_resolution(hal_device_id_t device_id, void *value, size_t size); // bits
-extern LIBRARY_EXPORT bool adc_get_reference_voltage(hal_device_id_t device_id, void *value, size_t size); // volts
+extern LIBRARY_EXPORT bool dac_init(void);
+extern LIBRARY_EXPORT bool dac_enumerate(hal_device_info_t *list, size_t *count);
+extern LIBRARY_EXPORT bool dac_write(hal_device_id_t device_id, void *value, size_t size); // write single value
+extern LIBRARY_EXPORT bool dac_write_array(hal_device_id_t device_id, void *buffer, size_t count, size_t size); // multiple values
+extern LIBRARY_EXPORT bool dac_get_resolution(hal_device_id_t device_id, void *value, size_t size); // bits
+extern LIBRARY_EXPORT bool dac_get_reference_voltage(hal_device_id_t device_id, void *value, size_t size); // volts
+
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // ADC_H
+#endif // DAC_H

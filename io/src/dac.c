@@ -26,7 +26,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "adc.h"
+#include "dac.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,7 +42,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef __FreeBSD__
 #include <sys/ioctl.h>
-#include <dev/adc/adc_ioctl.h>
+#include <dev/dac/dac_ioctl.h>
 #endif
 
 #ifndef HAL_MAX_DEVICES
@@ -50,14 +50,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef __linux__
-#define SYSFS_ADC_PATH "/sys/bus/iio/devices"
+#define SYSFS_DAC_PATH "/sys/bus/iio/devices"
 #endif
 
 // -----------------------------------------------------------------------------
-// Opaque ADC device structure
+// Opaque DAC device structure
 // -----------------------------------------------------------------------------
 
-typedef struct adc_device_t
+typedef struct dac_device_t
 {
 #ifdef __linux__
     int fd;
@@ -66,19 +66,19 @@ typedef struct adc_device_t
     int fd;
 #endif
     bool opened;
-} adc_device_t;
+} dac_device_t;
 
-static adc_device_t adc_devices[HAL_MAX_DEVICES];
-static size_t adc_device_count = 0;
+static dac_device_t dac_devices[HAL_MAX_DEVICES];
+static size_t dac_device_count = 0;
 
 // -----------------------------------------------------------------------------
 // Helpers for Linux
 // -----------------------------------------------------------------------------
 
 #ifdef __linux__
-static int adc_fd_open(const char *path)
+static int dac_fd_open(const char *path)
 {
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_WRONLY);
     if (fd < 0)
     {
         perror(path);
@@ -86,34 +86,31 @@ static int adc_fd_open(const char *path)
     return fd;
 }
 
-static bool adc_fd_read(int fd, char *buf, size_t size)
+static bool dac_fd_write(int fd, uint32_t value)
 {
     if (fd < 0)
     {
         return false;
     }
-    lseek(fd, 0, SEEK_SET);
-    ssize_t n = read(fd, buf, size - 1);
-    if (n <= 0)
-    {
-        return false;
-    }
-    buf[n] = '\0';
-    return true;
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%u", value);
+    ssize_t n = write(fd, buf, strlen(buf));
+    return n == (ssize_t)strlen(buf);
 }
 #endif
 
 // -----------------------------------------------------------------------------
-// Initialize ADC
+// Initialize DAC
 // -----------------------------------------------------------------------------
 
-bool adc_init(void)
+bool dac_init(void)
 {
-    memset(adc_devices, 0, sizeof(adc_devices));
-    adc_device_count = 0;
+    memset(dac_devices, 0, sizeof(dac_devices));
+    dac_device_count = 0;
 
 #ifdef __linux__
-    DIR *dp = opendir(SYSFS_ADC_PATH);
+    DIR *dp = opendir(SYSFS_DAC_PATH);
     if (!dp)
     {
         perror("opendir iio devices");
@@ -121,7 +118,7 @@ bool adc_init(void)
     }
 
     struct dirent *entry;
-    while ((entry = readdir(dp)) != NULL && adc_device_count < HAL_MAX_DEVICES)
+    while ((entry = readdir(dp)) != NULL && dac_device_count < HAL_MAX_DEVICES)
     {
         if (strncmp(entry->d_name, "iio:device", 10) != 0)
         {
@@ -130,15 +127,15 @@ bool adc_init(void)
 
         // Open channel 0 for simplicity
         char path[256];
-        snprintf(path, sizeof(path), "%s/%s/in_voltage0_raw", SYSFS_ADC_PATH, entry->d_name);
+        snprintf(path, sizeof(path), "%s/%s/out_voltage0_raw", SYSFS_DAC_PATH, entry->d_name);
 
-        int fd = adc_fd_open(path);
+        int fd = dac_fd_open(path);
         if (fd >= 0)
         {
-            adc_devices[adc_device_count].fd = fd;
-            strncpy(adc_devices[adc_device_count].path, path, sizeof(adc_devices[adc_device_count].path));
-            adc_devices[adc_device_count].opened = true;
-            adc_device_count++;
+            dac_devices[dac_device_count].fd = fd;
+            strncpy(dac_devices[dac_device_count].path, path, sizeof(dac_devices[dac_device_count].path));
+            dac_devices[dac_device_count].opened = true;
+            dac_device_count++;
         }
     }
 
@@ -147,38 +144,38 @@ bool adc_init(void)
     for (int i = 0; i < HAL_MAX_DEVICES; i++)
     {
         char path[32];
-        snprintf(path, sizeof(path), "/dev/adc%d", i);
+        snprintf(path, sizeof(path), "/dev/dac%d", i);
         int fd = open(path, O_RDWR);
         if (fd >= 0)
         {
-            adc_devices[adc_device_count].fd = fd;
-            adc_devices[adc_device_count].opened = true;
-            adc_device_count++;
+            dac_devices[dac_device_count].fd = fd;
+            dac_devices[dac_device_count].opened = true;
+            dac_device_count++;
         }
     }
 #endif
 
-    return adc_device_count > 0;
+    return dac_device_count > 0;
 }
 
 // -----------------------------------------------------------------------------
-// Enumerate ADC devices
+// Enumerate DAC devices
 // -----------------------------------------------------------------------------
 
-bool adc_enumerate(hal_device_info_t *list, size_t *count)
+bool dac_enumerate(hal_device_info_t *list, size_t *count)
 {
     if (!list || !count)
     {
         return false;
     }
 
-    size_t n = (*count < adc_device_count) ? *count : adc_device_count;
+    size_t n = (*count < dac_device_count) ? *count : dac_device_count;
     for (size_t i = 0; i < n; i++)
     {
-        snprintf(list[i].path, sizeof(list[i].path), "%s", adc_devices[i].opened ? "/dev/adc" : "");
-        snprintf(list[i].name, sizeof(list[i].name), "ADC_Device_%zu", i);
-        list[i].type = HAL_DEVICE_TYPE_ADC;
-        list[i].capabilities = HAL_CAP_ADC;
+        snprintf(list[i].path, sizeof(list[i].path), "%s", dac_devices[i].opened ? "/dev/dac" : "");
+        snprintf(list[i].name, sizeof(list[i].name), "DAC_Device_%zu", i);
+        list[i].type = HAL_DEVICE_TYPE_DAC;
+        list[i].capabilities = HAL_CAP_DAC;
         list[i].metadata = NULL;
     }
     *count = n;
@@ -186,57 +183,48 @@ bool adc_enumerate(hal_device_info_t *list, size_t *count)
 }
 
 // -----------------------------------------------------------------------------
-// Read ADC value
+// Write DAC value
 // -----------------------------------------------------------------------------
 
-bool adc_read(hal_device_id_t device_id, void *value, size_t size)
+bool dac_write(hal_device_id_t device_id, void *value, size_t size)
 {
     (void)size;
-    if (device_id >= adc_device_count || !value)
+    if (device_id >= dac_device_count || !value)
     {
         return false;
     }
 
+    uint32_t val = *((uint32_t *)value);
+
 #ifdef __linux__
-    char buf[32];
-    if (!adc_fd_read(adc_devices[device_id].fd, buf, sizeof(buf)))
-    {
-        return false;
-    }
-    *((uint32_t *)value) = (uint32_t)atoi(buf);
-    return true;
+    return dac_fd_write(dac_devices[device_id].fd, val);
 #elif __FreeBSD__
-    struct adc_ioc_read rd;
-    rd.channel = 0;
-    rd.value = 0;
-    if (ioctl(adc_devices[device_id].fd, ADC_READ, &rd) != 0)
-    {
-        return false;
-    }
-    *((uint32_t *)value) = rd.value;
-    return true;
+    struct dac_ioc_write wr;
+    wr.channel = 0;
+    wr.value = val;
+    return ioctl(dac_devices[device_id].fd, DAC_WRITE, &wr) == 0;
 #endif
 }
 
 // -----------------------------------------------------------------------------
-// Get ADC resolution (bits)
+// Get DAC resolution (bits)
 // -----------------------------------------------------------------------------
 
-bool adc_get_resolution(hal_device_id_t device_id, void *value, size_t size)
+bool dac_get_resolution(hal_device_id_t device_id, void *value, size_t size)
 {
     (void)size;
-    if (device_id >= adc_device_count || !value)
+    if (device_id >= dac_device_count || !value)
     {
         return false;
     }
 
 #ifdef __linux__
-    // Assume 12-bit typical, or read from sysfs if available
+    // Assume 12-bit typical, can be extended to read sysfs if available
     *((uint32_t *)value) = 12;
     return true;
 #elif __FreeBSD__
-    struct adc_ioc_cfg cfg;
-    if (ioctl(adc_devices[device_id].fd, ADC_GETRESOLUTION, &cfg) != 0)
+    struct dac_ioc_cfg cfg;
+    if (ioctl(dac_devices[device_id].fd, DAC_GETRESOLUTION, &cfg) != 0)
     {
         return false;
     }
@@ -246,24 +234,24 @@ bool adc_get_resolution(hal_device_id_t device_id, void *value, size_t size)
 }
 
 // -----------------------------------------------------------------------------
-// Get ADC reference voltage (millivolts)
+// Get DAC reference voltage (millivolts)
 // -----------------------------------------------------------------------------
 
-bool adc_get_reference_voltage(hal_device_id_t device_id, void *value, size_t size)
+bool dac_get_reference_voltage(hal_device_id_t device_id, void *value, size_t size)
 {
     (void)size;
-    if (device_id >= adc_device_count || !value)
+    if (device_id >= dac_device_count || !value)
     {
         return false;
     }
 
 #ifdef __linux__
-    // Assume 3300 mV typical, or read from sysfs if available
+    // Assume 3300 mV typical, extend to read sysfs if available
     *((uint32_t *)value) = 3300;
     return true;
 #elif __FreeBSD__
-    struct adc_ioc_cfg cfg;
-    if (ioctl(adc_devices[device_id].fd, ADC_GETVREF, &cfg) != 0)
+    struct dac_ioc_cfg cfg;
+    if (ioctl(dac_devices[device_id].fd, DAC_GETVREF, &cfg) != 0)
     {
         return false;
     }
@@ -271,3 +259,4 @@ bool adc_get_reference_voltage(hal_device_id_t device_id, void *value, size_t si
     return true;
 #endif
 }
+

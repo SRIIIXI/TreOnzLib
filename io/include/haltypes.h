@@ -44,6 +44,7 @@ typedef enum hal_device_type_t{
     HAL_DEVICE_TYPE_I2C,
     HAL_DEVICE_TYPE_SPI,
     HAL_DEVICE_TYPE_ADC,
+    HAL_DEVICE_TYPE_DAC,
     HAL_DEVICE_TYPE_PWM,
     HAL_DEVICE_TYPE_CAN,
     HAL_DEVICE_TYPE_USB,
@@ -73,13 +74,14 @@ typedef void (*hal_event_callback_t)(hal_device_id_t device_id, const void* data
 #define HAL_CAP_I2C (1 << 2)
 #define HAL_CAP_SPI (1 << 3)
 #define HAL_CAP_ADC (1 << 4)
-#define HAL_CAP_PWM (1 << 5)
-#define HAL_CAP_CAN (1 << 6)
-#define HAL_CAP_USB (1 << 7)
-#define HAL_CAP_BLE_UART (1 << 8)
-#define HAL_CAP_BLE_USB (1 << 9)
-#define HAL_CAP_BLE_HCI (1 << 10)
-#define HAL_CAP_ALL (HAL_CAP_GPIO | HAL_CAP_UART | HAL_CAP_I2C | HAL_CAP_SPI | HAL_CAP_ADC | HAL_CAP_PWM | HAL_CAP_CAN | HAL_CAP_USB | HAL_CAP_BLE_UART | HAL_CAP_BLE_USB | HAL_CAP_BLE_HCI)
+#define HAL_CAP_DAC (1 << 5)
+#define HAL_CAP_PWM (1 << 6)
+#define HAL_CAP_CAN (1 << 7)
+#define HAL_CAP_USB (1 << 8)
+#define HAL_CAP_BLE_UART (1 << 9)
+#define HAL_CAP_BLE_USB (1 << 10)
+#define HAL_CAP_BLE_HCI (1 << 11)
+#define HAL_CAP_ALL (HAL_CAP_GPIO | HAL_CAP_UART | HAL_CAP_I2C | HAL_CAP_SPI | HAL_CAP_ADC | HAL_CAP_DAC | HAL_CAP_PWM | HAL_CAP_CAN | HAL_CAP_USB | HAL_CAP_BLE_UART | HAL_CAP_BLE_USB | HAL_CAP_BLE_HCI)
 
 #ifdef __cplusplus
 }
