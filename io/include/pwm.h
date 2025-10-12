@@ -32,20 +32,39 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "defines.h"
 #include "haltypes.h"
 #include <string.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern LIBRARY_EXPORT bool pwm_init(void);          // Initialize PWM subsystem
+// -----------------------------------------------------------------------------
+// PWM HAL API
+// -----------------------------------------------------------------------------
+
+extern LIBRARY_EXPORT bool pwm_init(void);
 extern LIBRARY_EXPORT bool pwm_enumerate(hal_device_info_t *list, size_t *count);
-extern LIBRARY_EXPORT bool pwm_set_frequency(hal_device_id_t device_id, uint32_t frequency); // Set PWM frequency for a device
-extern LIBRARY_EXPORT bool pwm_set_duty_cycle(hal_device_id_t device_id, float duty_cycle); // Set PWM duty cycle for a device
-extern LIBRARY_EXPORT bool pwm_enable(hal_device_id_t device_id); // Enable PWM output
-extern LIBRARY_EXPORT bool pwm_disable(hal_device_id_t device_id); // Disable PWM output   
+
+// Frequency in Hz
+extern LIBRARY_EXPORT bool pwm_set_frequency(hal_device_id_t device_id, void *config, size_t size);
+extern LIBRARY_EXPORT bool pwm_get_frequency(hal_device_id_t device_id, void *config, size_t size);
+
+// Duty cycle 0.0f - 1.0f
+extern LIBRARY_EXPORT bool pwm_set_duty_cycle(hal_device_id_t device_id, void *config, size_t size);
+extern LIBRARY_EXPORT bool pwm_get_duty_cycle(hal_device_id_t device_id, void *config, size_t size);
+
+// Polarity (true = normal, false = inversed)
+extern LIBRARY_EXPORT bool pwm_set_polarity(hal_device_id_t device_id, void *config, size_t size);
+extern LIBRARY_EXPORT bool pwm_get_polarity(hal_device_id_t device_id, void *config, size_t size);
+
+// Enable / Disable PWM
+extern LIBRARY_EXPORT bool pwm_enable(hal_device_id_t device_id);
+extern LIBRARY_EXPORT bool pwm_disable(hal_device_id_t device_id);
+extern LIBRARY_EXPORT bool pwm_is_enabled(hal_device_id_t device_id, void *config, size_t size);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // HAL_H
+#endif // PWM_H

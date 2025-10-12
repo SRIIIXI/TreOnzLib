@@ -118,23 +118,22 @@ ${PROJECT_VERTEXTLIB_IO_INCLUDE_DIR}/can.h
 )
 
 
-add_library(${Project} SHARED ${SOURCES} ${HEADERS})
-add_library(${Project}.net SHARED ${SOURCES} ${HEADERS} ${NETWORK_SOURCES} ${NETWORK_HEADERS})
+add_library(${Project}.all SHARED ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ${IO_SOURCES} ${IO_HEADERS})
+add_library(${Project}.core SHARED ${SOURCES} ${HEADERS})
+add_library(${Project}.net SHARED ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS})
 add_library(${Project}.io SHARED ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS})
 
 add_executable(${Project}.test.bin ${SOURCES} ${HEADERS} ./tests/main.c)
 add_executable(${Project}.test_comm.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ./tests/commmain.c)
 add_executable(${Project}.test_io.bin ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS} ./tests/iomain.c)
 
-set(CPACK_PACKAGE_FILE_NAME ${Project}.${CMAKE_SYSTEM_PROCESSOR}.${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH})
-set(CPACK_PACKAGE_DESCRIPTION, "Core C Utilities for Vertex Edge Framework")
-
-set(CPACK_GENERATOR "DEB")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Subrato Roy")
-install(TARGETS ${Project} DESTINATION local/lib)
-install(FILES ${HEADERS} DESTINATION local/include/CoreLib)
-
-include(CPack)
+# set(CPACK_PACKAGE_FILE_NAME ${Project}.${CMAKE_SYSTEM_PROCESSOR}.${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH})
+# set(CPACK_PACKAGE_DESCRIPTION, "Core C Utilities for Vertex Edge Framework")
+# set(CPACK_GENERATOR "DEB")
+# set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Subrato Roy")
+# install(TARGETS ${Project} DESTINATION local/lib)
+# install(FILES ${HEADERS} DESTINATION local/include/CoreLib)
+# include(CPack)
 
 
 
