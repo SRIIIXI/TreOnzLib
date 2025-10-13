@@ -26,14 +26,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "imap.h"
+#include "imap4.h"
 #include "stringex.h"
-#include "responder.h"
-#include "responderssl.h"
+#include "tcpclient.h"
 
 #include <malloc.h>
 
-typedef struct imap_t
+typedef struct imap4_t
 {
     char host[33];
     char username[33];
@@ -44,26 +43,25 @@ typedef struct imap_t
     char currentDirectory[65];
     char errorStr[65];
 
-    //responder_ssl_t* bearer;
-    responder_t* bearer;
-}imap_t;
+    tcp_client_t* bearer;
+}imap4_t;
 
-unsigned long imap_internal_get_number(const char* str);
+unsigned long imap4_internal_get_number(const char* str);
 
-imap_t* imap_allocate(void)
+imap4_t* imap4_allocate(void)
 {
-    imap_t* ptr = (imap_t*)calloc(1, sizeof (imap_t));
-    ptr->bearer = responder_allocate();
+    imap4_t* ptr = (imap4_t*)calloc(1, sizeof (imap4_t));
+    ptr->bearer = tcp_client_allocate();
     return ptr;
 }
 
-void imap_free(imap_t* ptr)
+void imap4_free(imap4_t* ptr)
 {
-    responder_free(ptr->bearer);
+    tcp_client_free(ptr->bearer);
     free(ptr);
 }
 
-void imap_set_account_information(imap_t* ptr, const char* hoststr, uint16_t portstr, const char* usernamestr, const char* passwordstr, security_type_t sectype)
+void imap4_set_account_information(imap4_t* ptr, const char* hoststr, uint16_t portstr, const char* usernamestr, const char* passwordstr, security_type_t sectype)
 {
 	if (sectype == Tls)
 	{
@@ -80,7 +78,7 @@ void imap_set_account_information(imap_t* ptr, const char* hoststr, uint16_t por
     return;
 }
 
-bool imap_connect(imap_t* ptr)
+bool imap4_connect(imap4_t* ptr)
 {
 //	bool need_ssl = false;
 
@@ -106,7 +104,7 @@ bool imap_connect(imap_t* ptr)
 	return false;
 }
 
-bool imap_disconnect(imap_t* ptr)
+bool imap4_disconnect(imap4_t* ptr)
 {
 //	if (bearer.IsConnected())
 //	{
@@ -116,7 +114,7 @@ bool imap_disconnect(imap_t* ptr)
 	return false;
 }
 
-bool imap_get_capabilities(imap_t* ptr)
+bool imap4_get_capabilities(imap4_t* ptr)
 {
 //	std::string resp;
 //	std::string capability = "CY CAPABILITY\r\n";
@@ -138,7 +136,7 @@ bool imap_get_capabilities(imap_t* ptr)
 	return false;
 }
 
-bool imap_login(imap_t* ptr)
+bool imap4_login(imap4_t* ptr)
 {
 //	std::string resp;
 
@@ -164,7 +162,7 @@ bool imap_login(imap_t* ptr)
 	return false;
 }
 
-bool imap_logout(imap_t* ptr)
+bool imap4_logout(imap4_t* ptr)
 {
 //	std::string resp;
 
@@ -188,19 +186,19 @@ bool imap_logout(imap_t* ptr)
 	return false;
 }
 
-const char* imap_get_error(imap_t* ptr)
+const char* imap4_get_error(imap4_t* ptr)
 {
     //return errorStr;
     return NULL;
 }
 
-const char* imap_get_account(imap_t* ptr)
+const char* imap4_get_account(imap4_t* ptr)
 {
     //return username;
     return NULL;
 }
 
-bool imap_expunge(imap_t* ptr, const char* dir)
+bool imap4_expunge(imap4_t* ptr, const char* dir)
 {
 //	std::string resp;
 //	std::string capability = "EX EXPUNGE\r\n";
@@ -222,7 +220,7 @@ bool imap_expunge(imap_t* ptr, const char* dir)
 	return false;
 }
 
-bool imap_mark_as_seen(imap_t* ptr, const char* uid)
+bool imap4_mark_as_seen(imap4_t* ptr, const char* uid)
 {
 //	std::string resp;
 //	char command[128] = { 0 };
@@ -251,7 +249,7 @@ bool imap_mark_as_seen(imap_t* ptr, const char* uid)
     return false;
 }
 
-bool imap_delete_message(imap_t* ptr, const char* uid)
+bool imap4_delete_message(imap4_t* ptr, const char* uid)
 {
 //	std::string resp;
 //	char command[128] = { 0 };
@@ -280,7 +278,7 @@ bool imap_delete_message(imap_t* ptr, const char* uid)
     return false;
 }
 
-bool imap_flag_message(imap_t* ptr, const char* uid, const char* flag)
+bool imap4_flag_message(imap4_t* ptr, const char* uid, const char* flag)
 {
 //	std::string resp;
 //	char command[128] = { 0 };
@@ -309,7 +307,7 @@ bool imap_flag_message(imap_t* ptr, const char* uid, const char* flag)
     return false;
 }
 
-bool imap_get_directory_list(imap_t* ptr, const char** dirList)
+bool imap4_get_directory_list(imap4_t* ptr, const char** dirList)
 {
 //	std::string resp;
 
@@ -360,7 +358,7 @@ bool imap_get_directory_list(imap_t* ptr, const char** dirList)
     return false;
 }
 
-bool imap_select_directory(imap_t* ptr, const char* dirname)
+bool imap4_select_directory(imap4_t* ptr, const char* dirname)
 {
 //	currentDirectory = dirname;
 
@@ -400,7 +398,7 @@ bool imap_select_directory(imap_t* ptr, const char* dirname)
     return false;
 }
 
-bool imap_get_directory(imap_t* ptr, const char* dirname, unsigned long emailCount, unsigned long uidNext)
+bool imap4_get_directory(imap4_t* ptr, const char* dirname, unsigned long emailCount, unsigned long uidNext)
 {
 //	currentDirectory = dirname;
 	
@@ -456,7 +454,7 @@ bool imap_get_directory(imap_t* ptr, const char* dirname, unsigned long emailCou
     return false;
 }
 
-bool imap_get_emails_all(imap_t* ptr, const char* dirname, const char* uidlist)
+bool imap4_get_emails_all(imap4_t* ptr, const char* dirname, const char* uidlist)
 {
 //	std::string fromdate = "01-JAN-1980";
 //	std::string resp;
@@ -498,7 +496,7 @@ bool imap_get_emails_all(imap_t* ptr, const char* dirname, const char* uidlist)
     return false;
 }
 
-bool imap_get_emails_since(imap_t* ptr, const char* dirname, const char* fromdate, const char* uidlist)
+bool imap4_get_emails_since(imap4_t* ptr, const char* dirname, const char* fromdate, const char* uidlist)
 {
 //	std::string resp;
 //	std::vector<std::string> buffer;
@@ -539,7 +537,7 @@ bool imap_get_emails_since(imap_t* ptr, const char* dirname, const char* fromdat
     return false;
 }
 
-bool imap_get_emails_prior(imap_t* ptr, const char* dirname, const char* fromdate, const char* uidlist)
+bool imap4_get_emails_prior(imap4_t* ptr, const char* dirname, const char* fromdate, const char* uidlist)
 {
 //	std::string resp;
 //	std::vector<std::string> buffer;
@@ -580,7 +578,7 @@ bool imap_get_emails_prior(imap_t* ptr, const char* dirname, const char* fromdat
     return false;
 }
 
-bool imap_get_emails_recent(imap_t* ptr, const char* dirname, const char* uidlist)
+bool imap4_get_emails_recent(imap4_t* ptr, const char* dirname, const char* uidlist)
 {
 //	std::string resp;
 //	std::vector<std::string> buffer;
@@ -621,7 +619,7 @@ bool imap_get_emails_recent(imap_t* ptr, const char* dirname, const char* uidlis
     return false;
 }
 
-bool imap_get_message_header(imap_t* ptr, const char* uid, mail_t* mail)
+bool imap4_get_message_header(imap4_t* ptr, const char* uid, mail_t* mail)
 {
 //	char command[128] = { 0 };
 //	memset(command, 0, 128);
@@ -715,7 +713,7 @@ bool imap_get_message_header(imap_t* ptr, const char* uid, mail_t* mail)
     return false;
 }
 
-bool imap_get_message_body(imap_t* ptr, const char* uid, mail_t* mail)
+bool imap4_get_message_body(imap4_t* ptr, const char* uid, mail_t* mail)
 {
 //	char command[128] = { 0 };
 //	memset(command, 0, 128);
@@ -769,7 +767,7 @@ bool imap_get_message_body(imap_t* ptr, const char* uid, mail_t* mail)
 
 ///////////////////////////////////////////////////////////////////////////
 
-unsigned long imap_internal_get_number(const char* str)
+unsigned long imap4_internal_get_number(const char* str)
 {
     unsigned long num = -1;
 //	std::string str_count;
