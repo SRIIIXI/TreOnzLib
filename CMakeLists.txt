@@ -131,7 +131,7 @@ add_library(${Project}.net SHARED ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_H
 add_library(${Project}.io SHARED ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS})
 
 add_executable(${Project}.test.bin ${SOURCES} ${HEADERS} ./tests/main.c)
-add_executable(${Project}.test_comm.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ./tests/commmain.c)
+add_executable(${Project}.test.smtp.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ./tests/testsmtp.c)
 add_executable(${Project}.test_io.bin ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS} ./tests/iomain.c)
 
 # set(CPACK_PACKAGE_FILE_NAME ${Project}.${CMAKE_SYSTEM_PROCESSOR}.${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH})
