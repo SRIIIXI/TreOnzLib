@@ -124,25 +124,31 @@ ${PROJECT_VERTEXTLIB_IO_INCLUDE_DIR}/usb.h
 ${PROJECT_VERTEXTLIB_IO_INCLUDE_DIR}/ble.h
 )
 
-
-add_library(${Project}.all SHARED ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ${IO_SOURCES} ${IO_HEADERS})
 add_library(${Project}.core SHARED ${SOURCES} ${HEADERS})
-add_library(${Project}.net SHARED ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS})
+add_library(${Project}.comm SHARED ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS})
 add_library(${Project}.io SHARED ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS})
 
-add_executable(${Project}.test.bin ${SOURCES} ${HEADERS} ./tests/main.c)
+#Core library tests
+add_executable(${Project}.test.bin ${SOURCES} ${HEADERS} ./tests/testcore.c)
+
+#Pure TCP/IP Tests
 add_executable(${Project}.test.smtp.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ./tests/testsmtp.c)
 add_executable(${Project}.test.imap4.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ./tests/testimap4.c)
 add_executable(${Project}.test.mqtt.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ./tests/testmqtt.c)
-add_executable(${Project}.test_io.bin ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS} ./tests/iomain.c)
 
-# set(CPACK_PACKAGE_FILE_NAME ${Project}.${CMAKE_SYSTEM_PROCESSOR}.${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH})
-# set(CPACK_PACKAGE_DESCRIPTION, "Core C Utilities for Vertex Edge Framework")
-# set(CPACK_GENERATOR "DEB")
-# set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Subrato Roy")
-# install(TARGETS ${Project} DESTINATION local/lib)
-# install(FILES ${HEADERS} DESTINATION local/include/CoreLib)
-# include(CPack)
+#TCP/IP and Lower Level Hardware Interface Tests
+add_executable(${Project}.test.modbus.bin ${SOURCES} ${HEADERS} ${COMM_SOURCES} ${COMM_HEADERS} ${IO_SOURCES} ${IO_HEADERS} ./tests/testmodbus.c)
+
+#Pure Hardware Interface Tests
+add_executable(${Project}.test_uart.bin ${SOURCES} ${HEADERS} ${IO_SOURCES} ${IO_HEADERS} ./tests/testuart.c)
+
+set(CPACK_PACKAGE_FILE_NAME ${Project}.${CMAKE_SYSTEM_PROCESSOR}.${LIB_VERSION_MAJOR}.${LIB_VERSION_MINOR}.${LIB_VERSION_PATCH})
+set(CPACK_PACKAGE_DESCRIPTION, "Core C Utilities for Vertex Edge Framework")
+set(CPACK_GENERATOR "DEB")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Subrato Roy")
+install(TARGETS ${Project}.core ${Project}.comm ${Project}.io DESTINATION local/lib)
+install(FILES ${HEADERS} DESTINATION local/include/VertexLib)
+include(CPack)
 
 
 
