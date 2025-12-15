@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.24)
 
-set(Project Vertex)
+set(Project TreOnzLib)
 project(${Project})
 
 set(LIB_VERSION_MAJOR 1)

@@ -405,7 +405,7 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
 
     // Code for sending actual message body
     memset(tx_temp, 0, sizeof(tx_temp));
-    sprintf(tx_temp, "From: %S\r\nTo: %s\r\nSubject: %s\r\n\r\n%s\r\n.\r\n", ptr->emailid, recipient, subject, plaintext_message);
+    sprintf(tx_temp, "From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s\r\n.\r\n", ptr->emailid, recipient, subject, plaintext_message);
 
 
     tx_buffer = string_allocate(tx_temp);   
