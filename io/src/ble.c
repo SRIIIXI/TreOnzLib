@@ -421,7 +421,7 @@ int ble_advertise_start(ble_device_t* dev, const ble_adv_options_t* adv_opts)
     cmd[0] = 0x01; /* HCI Command Packet */
     cmd[1] = 0x08; cmd[2] = 0x20; /* LE Set Advertising Data */
     cmd[3] = 31;   /* Advertising data length */
-    memset(&cmd[4], 0, 31);
+    memset(&cmd[4], 0, 30);
     memcpy(&cmd[4], adv_data, offset);
 
     if (ble_send_cmd(dev, cmd, 4 + 31) < 0)

@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #ifdef __linux__
 #include <dirent.h>
@@ -235,8 +236,8 @@ bool pwm_set_frequency(hal_device_id_t device_id, void *config, size_t size)
 #ifdef __linux__
     uint64_t period_ns = 1000000000ULL / hz;
     char buf[32];
-    snprintf(buf, sizeof(buf), "%llu", period_ns);
-    return pwm_fd_write(pwm_devices[device_id].fd_period, buf);
+    snprintf(buf, sizeof(buf), "%ld", period_ns);
+   return pwm_fd_write(pwm_devices[device_id].fd_period, buf);
 #elif __FreeBSD__
     struct pwm_period pp = { .period_ns = 1000000000ULL / hz };
     return ioctl(pwm_devices[device_id].fd, PWM_SETPERIOD, &pp) == 0;
@@ -298,7 +299,7 @@ bool pwm_set_duty_cycle(hal_device_id_t device_id, void *config, size_t size)
     }
     uint64_t period_ns = strtoull(period_buf, NULL, 10);
     uint64_t duty_ns = (uint64_t)(duty * period_ns);
-    snprintf(buf, sizeof(buf), "%llu", duty_ns);
+    snprintf(buf, sizeof(buf), "%ld", duty_ns);
     return pwm_fd_write(pwm_devices[device_id].fd_duty_cycle, buf);
 #elif __FreeBSD__
     struct pwm_duty pd;
