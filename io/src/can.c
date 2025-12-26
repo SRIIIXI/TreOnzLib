@@ -35,7 +35,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
 
 #ifdef __linux__
 #include <sys/types.h>

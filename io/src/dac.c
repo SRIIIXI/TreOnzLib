@@ -42,7 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef __FreeBSD__
 #include <sys/ioctl.h>
-#include <dev/dac/dac_ioctl.h>
 #endif
 
 #ifndef HAL_MAX_DEVICES
@@ -199,10 +198,10 @@ bool dac_write(hal_device_id_t device_id, void *value, size_t size)
 #ifdef __linux__
     return dac_fd_write(dac_devices[device_id].fd, val);
 #elif __FreeBSD__
-    struct dac_ioc_write wr;
-    wr.channel = 0;
-    wr.value = val;
-    return ioctl(dac_devices[device_id].fd, DAC_WRITE, &wr) == 0;
+    // struct dac_ioc_write wr;
+    // wr.channel = 0;
+    // wr.value = val;
+    // return ioctl(dac_devices[device_id].fd, DAC_WRITE, &wr) == 0;
 #endif
 }
 
@@ -223,12 +222,12 @@ bool dac_get_resolution(hal_device_id_t device_id, void *value, size_t size)
     *((uint32_t *)value) = 12;
     return true;
 #elif __FreeBSD__
-    struct dac_ioc_cfg cfg;
-    if (ioctl(dac_devices[device_id].fd, DAC_GETRESOLUTION, &cfg) != 0)
-    {
-        return false;
-    }
-    *((uint32_t *)value) = cfg.resolution;
+    // struct dac_ioc_cfg cfg;
+    // if (ioctl(dac_devices[device_id].fd, DAC_GETRESOLUTION, &cfg) != 0)
+    // {
+    //     return false;
+    // }
+    // *((uint32_t *)value) = cfg.resolution;
     return true;
 #endif
 }
@@ -250,12 +249,12 @@ bool dac_get_reference_voltage(hal_device_id_t device_id, void *value, size_t si
     *((uint32_t *)value) = 3300;
     return true;
 #elif __FreeBSD__
-    struct dac_ioc_cfg cfg;
-    if (ioctl(dac_devices[device_id].fd, DAC_GETVREF, &cfg) != 0)
-    {
-        return false;
-    }
-    *((uint32_t *)value) = cfg.vref_mv;
+    // struct dac_ioc_cfg cfg;
+    // if (ioctl(dac_devices[device_id].fd, DAC_GETVREF, &cfg) != 0)
+    // {
+    //     return false;
+    // }
+    // *((uint32_t *)value) = cfg.vref_mv;
     return true;
 #endif
 }

@@ -26,37 +26,17 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef VERTEX_LIB
-#define VERTEX_LIB
+#include "treonzlib.h"
 
-#include<stdint.h>
-#include<stdbool.h>
+static unsigned long library_ref_count = 0;
 
-#include "base64.h"
-#include "buffer.h"
-#include "directory.h"
-#include "dictionary.h"
-#include "file.h"
-#include "keyvalue.h"
-#include "list.h"
-#include "logger.h"
-#include "queue.h"
-#include "stack.h"
-#include "stringex.h"
-#include "configuration.h"
-#include "environment.h"
+void __attribute__((constructor)) library_load(void)
+{
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-// Shared libary load/unload handlers
-
-void __attribute__((constructor)) library_load(void);
-void __attribute__((destructor)) library_unload(void);
-
-#ifdef __cplusplus
 }
-#endif
 
-#endif
+void __attribute__((destructor)) library_unload(void)
+{
+
+}
+

@@ -29,7 +29,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "i2c.h"
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __linux__
 #include <linux/i2c-dev.h>
 #elif __FreeBSD__
-#include <sys/i2c.h>
+#include <iicbus/iic.h>
 #include <sys/ioccom.h>
 #endif
 
@@ -179,11 +178,10 @@ bool i2c_set_address(hal_device_id_t device_id, uint8_t address)
 #ifdef __linux__
     if (ioctl(dev->fd, I2C_SLAVE, address) < 0) return false;
 #elif __FreeBSD__
-    struct iic_req req;
+    struct iiccmd req;
     req.slave = address;
-    req.len = 0;
     req.buf = NULL;
-    if (ioctl(dev->fd, I2C_SLAVE, &req) < 0) return false;
+    if (ioctl(dev->fd, I2CSADDR, &req) < 0) return false;
 #endif
     return true;
 }

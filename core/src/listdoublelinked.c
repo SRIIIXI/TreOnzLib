@@ -56,6 +56,7 @@ void list_double_linked_internal_remove_from_head(list_double_linked_t* lptr);
 void list_double_linked_internal_remove_from_tail(list_double_linked_t* lptr);
 void list_double_linked_internal_add_to_head(list_double_linked_t* lptr, node_double_linked_t *ptr);
 void list_double_linked_internal_add_to_tail(list_double_linked_t* lptr, node_double_linked_t* ptr);
+void list_double_linked_internal_append_all(list_double_linked_t* dest, list_double_linked_t* src);
 
 // Forward declarations
 static node_double_linked_t* list_double_linked_internal_merge_sorted(node_double_linked_t* left, node_double_linked_t* right, list_double_linked_compare_fn cmp);
@@ -520,25 +521,14 @@ list_double_linked_t* list_double_linked_join(list_double_linked_t* lptrFirst, l
         return NULL;
     }
 
-    // Helper to append all nodes from a list to lptrNew
-    void append_all(list_double_linked_t* dest, list_double_linked_t* src)
-    {
-        node_double_linked_t* ptr = src->head;
-        while (ptr != NULL)
-        {
-            list_double_linked_add_to_tail(dest, ptr->data, ptr->size);
-            ptr = ptr->next;
-        }
-    }
-
     if (lptrFirst != NULL)
     {
-        append_all(lptrNew, lptrFirst);
+        list_double_linked_internal_append_all(lptrNew, lptrFirst);
     }
 
     if (lptrSecond != NULL)
     {
-        append_all(lptrNew, lptrSecond);
+        list_double_linked_internal_append_all(lptrNew, lptrSecond);
     }
 
     return lptrNew;
@@ -768,4 +758,15 @@ int list_double_linked_internal_default_compare(const void* a, size_t a_sz, cons
     if (int_a < int_b) return -1;
     if (int_a > int_b) return 1;
     return 0;
+}
+
+// Helper to append all nodes from a list to lptrNew
+void list_double_linked_internal_append_all(list_double_linked_t* dest, list_double_linked_t* src)
+{
+    node_double_linked_t* ptr = src->head;
+    while (ptr != NULL)
+    {
+        list_double_linked_add_to_tail(dest, ptr->data, ptr->size);
+        ptr = ptr->next;
+    }
 }

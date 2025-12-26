@@ -29,7 +29,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "spi.h"
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifdef __linux__
 #include <linux/spi/spidev.h>
 #elif __FreeBSD__
-#include <sys/spiio.h>
+#include <spibus/spi.h>
 #endif
 
 #define MAX_SPI_DEVICES 16

@@ -42,7 +42,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef __FreeBSD__
 #include <sys/ioctl.h>
-#include <dev/adc/adc_ioctl.h>
 #endif
 
 #ifndef HAL_MAX_DEVICES
@@ -206,14 +205,14 @@ bool adc_read(hal_device_id_t device_id, void *value, size_t size)
     *((uint32_t *)value) = (uint32_t)atoi(buf);
     return true;
 #elif __FreeBSD__
-    struct adc_ioc_read rd;
-    rd.channel = 0;
-    rd.value = 0;
-    if (ioctl(adc_devices[device_id].fd, ADC_READ, &rd) != 0)
-    {
-        return false;
-    }
-    *((uint32_t *)value) = rd.value;
+    // struct adc_ioc_read rd;
+    // rd.channel = 0;
+    // rd.value = 0;
+    // if (ioctl(adc_devices[device_id].fd, ADC_READ, &rd) != 0)
+    // {
+    //     return false;
+    // }
+    // *((uint32_t *)value) = rd.value;
     return true;
 #endif
 }
@@ -235,12 +234,12 @@ bool adc_get_resolution(hal_device_id_t device_id, void *value, size_t size)
     *((uint32_t *)value) = 12;
     return true;
 #elif __FreeBSD__
-    struct adc_ioc_cfg cfg;
-    if (ioctl(adc_devices[device_id].fd, ADC_GETRESOLUTION, &cfg) != 0)
-    {
-        return false;
-    }
-    *((uint32_t *)value) = cfg.resolution;
+    // struct adc_ioc_cfg cfg;
+    // if (ioctl(adc_devices[device_id].fd, ADC_GETRESOLUTION, &cfg) != 0)
+    // {
+    //     return false;
+    // }
+    // *((uint32_t *)value) = cfg.resolution;
     return true;
 #endif
 }
@@ -262,12 +261,12 @@ bool adc_get_reference_voltage(hal_device_id_t device_id, void *value, size_t si
     *((uint32_t *)value) = 3300;
     return true;
 #elif __FreeBSD__
-    struct adc_ioc_cfg cfg;
-    if (ioctl(adc_devices[device_id].fd, ADC_GETVREF, &cfg) != 0)
-    {
-        return false;
-    }
-    *((uint32_t *)value) = cfg.vref_mv;
+    // struct adc_ioc_cfg cfg;
+    // if (ioctl(adc_devices[device_id].fd, ADC_GETVREF, &cfg) != 0)
+    // {
+    //     return false;
+    // }
+    // *((uint32_t *)value) = cfg.vref_mv;
     return true;
 #endif
 }

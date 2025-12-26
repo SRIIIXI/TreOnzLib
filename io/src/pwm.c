@@ -33,8 +33,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdbool.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <errno.h>
-#include <inttypes.h>
 
 #ifdef __linux__
 #include <dirent.h>
@@ -42,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef __FreeBSD__
 #include <sys/ioctl.h>
-#include <dev/pwm/pwm_ioctl.h>
+#include <pwm/pwmc.h>
 #endif
 
 #ifndef HAL_MAX_DEVICES
@@ -239,8 +237,19 @@ bool pwm_set_frequency(hal_device_id_t device_id, void *config, size_t size)
     snprintf(buf, sizeof(buf), "%ld", period_ns);
    return pwm_fd_write(pwm_devices[device_id].fd_period, buf);
 #elif __FreeBSD__
-    struct pwm_period pp = { .period_ns = 1000000000ULL / hz };
-    return ioctl(pwm_devices[device_id].fd, PWM_SETPERIOD, &pp) == 0;
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. You MUST get the current state first to preserve the duty cycle and enable flag
+    if (ioctl(fd, PWMGETSTATE, &state) == -1) {
+        return false;
+    }
+
+    // 2. Update the period (FreeBSD uses 'period' field in nanoseconds)
+    state.period = 1000000000ULL / hz;
+
+    // 3. Apply the updated state
+    return ioctl(fd, PWMSETSTATE, &state) == 0;
 #endif
 }
 
@@ -262,12 +271,12 @@ bool pwm_get_frequency(hal_device_id_t device_id, void *config, size_t size)
     *((uint32_t *)config) = (uint32_t)(1000000000ULL / period_ns);
     return true;
 #elif __FreeBSD__
-    struct pwm_period pp;
-    if (ioctl(pwm_devices[device_id].fd, PWM_GETPERIOD, &pp) != 0)
+    struct pwm_state state;
+    if (ioctl(pwm_devices[device_id].fd, PWMGETSTATE, &state) != 0)
     {
         return false;
     }
-    *((uint32_t *)config) = (uint32_t)(1000000000ULL / pp.period_ns);
+    *((uint32_t *)config) = (uint32_t)(1000000000ULL / state.period);
     return true;
 #endif
 }
@@ -302,15 +311,21 @@ bool pwm_set_duty_cycle(hal_device_id_t device_id, void *config, size_t size)
     snprintf(buf, sizeof(buf), "%ld", duty_ns);
     return pwm_fd_write(pwm_devices[device_id].fd_duty_cycle, buf);
 #elif __FreeBSD__
-    struct pwm_duty pd;
-    pd.duty_ns = 0; // default
-    struct pwm_period pp;
-    if (ioctl(pwm_devices[device_id].fd, PWM_GETPERIOD, &pp) != 0)
-    {
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. Fetch current period and status
+    if (ioctl(fd, PWMGETSTATE, &state) != 0) {
         return false;
     }
-    pd.duty_ns = (uint64_t)(duty * pp.period_ns);
-    return ioctl(pwm_devices[device_id].fd, PWM_SETDUTY, &pd) == 0;
+
+    // 2. Calculate duty cycle
+    // FreeBSD .duty and .period are both in nanoseconds.
+    // If 'duty' is a float/double percentage (0.0 to 1.0):
+    state.duty = (uint32_t)((double)duty * state.period);
+
+    // 3. Set the updated state
+    return ioctl(fd, PWMSETSTATE, &state) == 0;
 #endif
 }
 
@@ -338,17 +353,23 @@ bool pwm_get_duty_cycle(hal_device_id_t device_id, void *config, size_t size)
     *((float *)config) = (float)duty_ns / (float)period_ns;
     return true;
 #elif __FreeBSD__
-    struct pwm_duty pd;
-    struct pwm_period pp;
-    if (ioctl(pwm_devices[device_id].fd, PWM_GETPERIOD, &pp) != 0)
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // FreeBSD fetches both period and duty in a single call
+    if (ioctl(fd, PWMGETSTATE, &state) != 0)
     {
         return false;
     }
-    if (ioctl(pwm_devices[device_id].fd, PWM_GETDUTY, &pd) != 0)
-    {
-        return false;
+
+    // Calculate the ratio
+    // .duty and .period are uint32_t values in nanoseconds
+    if (state.period > 0) {
+        *((float *)config) = (float)state.duty / (float)state.period;
+    } else {
+        *((float *)config) = 0.0f;
     }
-    *((float *)config) = (float)pd.duty_ns / (float)pp.period_ns;
+
     return true;
 #endif
 }
@@ -369,8 +390,24 @@ bool pwm_set_polarity(hal_device_id_t device_id, void *config, size_t size)
 #ifdef __linux__
     return pwm_fd_write(pwm_devices[device_id].fd_polarity, normal ? "normal" : "inversed");
 #elif __FreeBSD__
-    int pol = normal ? PWM_POL_NORMAL : PWM_POL_INVERSED;
-    return ioctl(pwm_devices[device_id].fd, PWM_SETPOLARITY, &pol) == 0;
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. Fetch current state
+    if (ioctl(fd, PWMGETSTATE, &state) != 0) {
+        return false;
+    }
+
+    // 2. Set/Clear the inverted flag
+    // FreeBSD defines PWM_POLARITY_INVERTED in <dev/pwm/pwmc.h>
+    if (normal) {
+        state.flags &= ~PWM_POLARITY_INVERTED;
+    } else {
+        state.flags |= PWM_POLARITY_INVERTED;
+    }
+
+    // 3. Apply the updated state
+    return ioctl(fd, PWMSETSTATE, &state) == 0;
 #endif
 }
 
@@ -391,12 +428,19 @@ bool pwm_get_polarity(hal_device_id_t device_id, void *config, size_t size)
     *((bool *)config) = (strncmp(buf, "normal", 6) == 0);
     return true;
 #elif __FreeBSD__
-    int pol;
-    if (ioctl(pwm_devices[device_id].fd, PWM_GETPOLARITY, &pol) != 0)
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. Fetch the unified state
+    if (ioctl(fd, PWMGETSTATE, &state) != 0)
     {
         return false;
     }
-    *((bool *)config) = (pol == PWM_POL_NORMAL);
+
+    // 2. Check the inversion bit in the flags field
+    // In FreeBSD, 'normal' is the absence of the PWM_POLARITY_INVERTED flag.
+    *((bool *)config) = !(state.flags & PWM_POLARITY_INVERTED);
+
     return true;
 #endif
 }
@@ -414,8 +458,21 @@ bool pwm_enable(hal_device_id_t device_id)
 #ifdef __linux__
     return pwm_fd_write(pwm_devices[device_id].fd_enable, "1");
 #elif __FreeBSD__
-    int val = 1;
-    return ioctl(pwm_devices[device_id].fd, PWM_SETENABLE, &val) == 0;
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. Fetch current state to preserve period, duty, and flags
+    if (ioctl(fd, PWMGETSTATE, &state) != 0) {
+        return false;
+    }
+
+    // 2. Set the enable flag
+    // val == 1 (enable), val == 0 (disable)
+    bool val = true;
+    state.enable = (bool)val;
+
+    // 3. Write the state back to the hardware
+    return ioctl(fd, PWMSETSTATE, &state) == 0;
 #endif
 }
 
@@ -428,8 +485,21 @@ bool pwm_disable(hal_device_id_t device_id)
 #ifdef __linux__
     return pwm_fd_write(pwm_devices[device_id].fd_enable, "0");
 #elif __FreeBSD__
-    int val = 0;
-    return ioctl(pwm_devices[device_id].fd, PWM_SETENABLE, &val) == 0;
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. Fetch current state to preserve period, duty, and flags
+    if (ioctl(fd, PWMGETSTATE, &state) != 0) {
+        return false;
+    }
+
+    // 2. Set the enable flag
+    // val == 1 (enable), val == 0 (disable)
+    bool val = false;
+    state.enable = (bool)val;
+
+    // 3. Write the state back to the hardware
+    return ioctl(fd, PWMSETSTATE, &state) == 0;
 #endif
 }
 
@@ -449,12 +519,13 @@ bool pwm_is_enabled(hal_device_id_t device_id, void *config, size_t size)
     *((bool *)config) = (strncmp(buf, "1", 1) == 0);
     return true;
 #elif __FreeBSD__
-    int val;
-    if (ioctl(pwm_devices[device_id].fd, PWM_GETENABLE, &val) != 0)
-    {
+    struct pwm_state state;
+    int fd = pwm_devices[device_id].fd;
+
+    // 1. Fetch current state to preserve period, duty, and flags
+    if (ioctl(fd, PWMGETSTATE, &state) != 0) {
         return false;
     }
-    *((bool *)config) = (val != 0);
-    return true;
+    return state.enable;
 #endif
 }

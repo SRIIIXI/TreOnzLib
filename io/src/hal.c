@@ -56,9 +56,12 @@ bool hal_open(void)
     status |= i2c_init();
     status |= pwm_init();
     status |= gpio_init();
-    status |= adc_init(); 
+    status |= adc_init();
+
+#ifdef __linux__
     status |= can_init();
-  
+#endif
+
     if (status == 0)
     {
         hal_initialized = true;
@@ -130,12 +133,14 @@ bool hal_enumerate(hal_device_info_t *device_list, size_t *num_devices)
         total += count;
     }
 
-    // CAN
+
+#ifdef __linux__    // CAN
     count = MAX_DEVICES - total;            
     if (can_enumerate(&device_list[total], &count) == 0)
     {
         total += count;
-    }   
+    }
+#endif
 
     memcpy(device_registry, device_list, total * sizeof(hal_device_info_t));
     device_count = total;
