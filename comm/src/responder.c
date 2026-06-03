@@ -120,7 +120,7 @@ bool responder_create_socket(responder_t *ptr, const char* servername, int serve
 
         memset(&(ptr->server_address), 0, sizeof(struct sockaddr_in));
         ptr->server_address.sin_family = AF_INET;
-        bcopy((char*)pHE->h_addr_list[0], (char*)&(ptr->server_address.sin_addr.s_addr), pHE->h_length);
+        memcpy((char*)&(ptr->server_address.sin_addr.s_addr), (char*)pHE->h_addr_list[0], pHE->h_length);
         ptr->server_address.sin_port = htons(serverport);
 
     }
@@ -300,96 +300,38 @@ bool responder_receive_buffer_by_length(responder_t* ptr, char** iobuffer, size_
 
  bool responder_receive_buffer_by_delimeter(responder_t* ptr, char** iobuffer, bool alloc_buffer)
  {
-    if(!ptr)
+    if(!ptr || iobuffer == NULL)
     {
         return  false;
     }
-
-    // If there are pre-fetched bytes left, we have to copy that first and release memory
 
     if(ptr->prefetched_buffer_size > 0)
     {
         if(alloc_buffer)
         {
             *iobuffer = (char*)calloc(1, ptr->prefetched_buffer_size + 1);
+            if (*iobuffer == NULL)
+            {
+                return false;
+            }
         }
 
         memcpy(*iobuffer, ptr->prefetched_buffer, ptr->prefetched_buffer_size);
         ptr->prefetched_buffer_size = 0;
         free(ptr->prefetched_buffer);
         ptr->prefetched_buffer = NULL;
+        return true;
     }
 
-    while(true)
-    {
-        char*	buffer = 0;
-        ssize_t	bytesread = 0;
-        buffer = (char*)calloc(1, bytesleft + 1);
-
-        if (buffer)
-        {
-            bytesread = (ssize_t)recv(ptr->socket, buffer, (int)bytesleft, 0);
-
-            if (out_len)
-            {
-                *out_len += (size_t)bytesread;
-            }
-        }
-
-        if (bytesread == 0)
-        {
-            // Connection closed gracefully
-            if (buffer)
-            {
-                free(buffer);
-            }
-
-            ptr->connected = false;
-            return true;
-        }
-
-        // Error or link down
-        if(bytesread < 0 || buffer == NULL)
-        {
-            ptr->error_code = SOCKET_ERROR;
-
-            if (buffer)
-            {
-                free(buffer);
-            }
-
-            if(alloc_buffer)
-            {
-                free(*iobuffer);
-            }
-            else
-            {
-                memset(*iobuffer, 0, len);
-            }
-
-            len	= 0;
-            ptr->connected = false;
-            return false;
-        }
-
-        memcpy(*iobuffer+bufferpos, buffer, (size_t)bytesread);
-        free(buffer);
-
-        bufferpos = bufferpos + (size_t)bytesread;
-
-        bytesleft = bytesleft - (size_t)bytesread;
-
-        if(bufferpos >= len)
-        {
-            return true;
-        }
-    }
+    size_t out_len = 0;
+    bool ret = responder_receive_buffer_by_length(ptr, iobuffer, 1024, &out_len, alloc_buffer);
+    return (ret && out_len > 0);
  }
 
 
 bool responder_receive_string(responder_t* ptr, char** iostr, const char* delimeter)
 {
-    if(!ptr)
+    if(!ptr || iostr == NULL || delimeter == NULL)
     {
         return  false;
     }
@@ -412,7 +354,7 @@ bool responder_receive_string(responder_t* ptr, char** iostr, const char* delime
 
             if(current_line != NULL)
             {
-                *iostr = (char*)calloc(1, strlen(current_line));
+                *iostr = (char*)calloc(1, strlen(current_line) + 1);
                 strcpy(*iostr, current_line);
                 free(current_line);
             }
@@ -470,29 +412,60 @@ bool responder_receive_string(responder_t* ptr, char** iostr, const char* delime
 
         free(buffer);
 
-        if(strstr(ptr->prefetched_buffer, delimeter) != 0)
+        if(strstr((const char*)ptr->prefetched_buffer, delimeter) != 0)
 		{
             responder_internal_split_buffer((const char*)ptr->prefetched_buffer, ptr->prefetched_buffer_size, delimeter, delimeter_len, &current_line, &current_len, &next_line, &next_len);
 
+            free(ptr->prefetched_buffer);
+            ptr->prefetched_buffer = NULL;
+            ptr->prefetched_buffer_size = 0;
+
             if(next_line != NULL)
             {
-                ptr->prefetched_buffer_size = strlen(next_line);
-            }
-            
-            if(ptr->prefetched_buffer_size > 0)
-            {
-                ptr->prefetched_buffer = (unsigned char*)calloc(1, ptr->prefetched_buffer_size +1);
+                ptr->prefetched_buffer_size = next_len;
+                ptr->prefetched_buffer = (unsigned char*)calloc(1, ptr->prefetched_buffer_size + 1);
+
+                if (ptr->prefetched_buffer == NULL)
+                {
+                    free(next_line);
+                    free(current_line);
+                    if (*iostr)
+                    {
+                        free(*iostr);
+                        *iostr = NULL;
+                    }
+                    return false;
+                }
+
                 memcpy(ptr->prefetched_buffer, next_line, ptr->prefetched_buffer_size);
                 free(next_line);
             }
             
+            if (current_line == NULL)
+            {
+                return false;
+            }
+
             if(*iostr == NULL)
             {
                 *iostr = (char*)calloc(1, strlen(current_line) + 1);
             }
             else
             {
-                *iostr = (char*)realloc(*iostr, strlen(*iostr) + strlen(current_line) + 1);
+                char* resized = (char*)realloc(*iostr, strlen(*iostr) + strlen(current_line) + 1);
+                if (resized == NULL)
+                {
+                    free(current_line);
+                    return false;
+                }
+
+                *iostr = resized;
+            }
+
+            if (*iostr == NULL)
+            {
+                free(current_line);
+                return false;
             }
 
             strcat(*iostr, current_line);
@@ -507,25 +480,47 @@ bool responder_receive_string(responder_t* ptr, char** iostr, const char* delime
 
 bool responder_send_buffer(responder_t* ptr, const char* data, size_t len)
 {
-    if(!ptr)
+    if(!ptr || data == NULL)
     {
         return  false;
     }
 
-	long sentsize =0;
+    if (!ptr->connected)
+    {
+        return false;
+    }
 
-    sentsize = send(ptr->socket, data, (int)len, (int)0);
+    if (len == 0)
+    {
+        return true;
+    }
 
-    if(sentsize == SOCKET_ERROR)
-	{
-		return false;
-	}
+    size_t sent_total = 0;
+
+    while (sent_total < len)
+    {
+        ssize_t sentsize = send(ptr->socket, data + sent_total, (int)(len - sent_total), 0);
+
+        if(sentsize <= 0)
+	    {
+            ptr->error_code = errno;
+            ptr->connected = false;
+		    return false;
+	    }
+
+        sent_total += (size_t)sentsize;
+    }
 
 	return true;
 }
 
 bool responder_send_string(responder_t* ptr, const char* str)
 {
+    if (str == NULL)
+    {
+        return false;
+    }
+
     size_t len = strlen(str);
 
     return responder_send_buffer(ptr, str, len);
@@ -711,7 +706,7 @@ void responder_clear_buffer(responder_t* ptr)
 
     if(ptr->prefetched_buffer_size > 0)
     {
-        printf("Clearing %d bytes from prefetched buffer", ptr->prefetched_buffer_size);
+        printf("Clearing %zu bytes from prefetched buffer", ptr->prefetched_buffer_size);
     }
 
     free(ptr->prefetched_buffer);
