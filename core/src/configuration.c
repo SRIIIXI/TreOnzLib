@@ -66,6 +66,8 @@ const char* configuration_internal_get_value(const configuration_t *conf_ptr, co
 
 configuration_t* configuration_allocate_default(void)
 {
+    const char* user_env = getenv("USER");
+    const char* home_env = getenv("HOME");
     char* filename = (char*)calloc(1024, sizeof(char));
 
     if (!filename)
@@ -73,28 +75,33 @@ configuration_t* configuration_allocate_default(void)
         return NULL;
     }
 
-    if(strcmp(getenv("USER"), "root") == 0)
+    if(user_env != NULL && strcmp(user_env, "root") == 0)
     {
         strcat(filename, "/etc/");
     }
     else
     {
-        strcat(filename, getenv("HOME"));
+        if (home_env == NULL)
+        {
+            free(filename);
+            return NULL;
+        }
+
+        strcat(filename, home_env);
         strcat(filename, "/.config/");
     }
 
-    string_t* proces_name = NULL;
+    string_t* proces_name = env_get_current_process_name();
 
-    if (!proces_name)
+    if (proces_name == NULL)
     {
         free(filename);
         return NULL;
     }
 
-    proces_name = env_get_current_process_name();
     strcat(filename, string_c_str(proces_name));
     strcat(filename, ".conf");
-    free(proces_name);
+    string_free(&proces_name);
 
     configuration_t* ptr = configuration_allocate(filename);
 
@@ -105,6 +112,11 @@ configuration_t* configuration_allocate_default(void)
 
 configuration_t* configuration_allocate(const char* filename)
 {
+    if (filename == NULL)
+    {
+        return NULL;
+    }
+
     configuration_t* ptr = NULL;
     FILE* fp = fopen(filename, "r");
 
@@ -131,10 +143,18 @@ configuration_t* configuration_allocate(const char* filename)
             {
                 string_t* buffer_str = string_allocate(buffer);
                 string_t* temp_buffer =  string_allocate(buffer);
+
+                if (buffer_str == NULL || temp_buffer == NULL)
+                {
+                    string_free(&buffer_str);
+                    string_free(&temp_buffer);
+                    continue;
+                }
+
                 string_all_trim(temp_buffer);
                 memset(buffer, 0, sizeof(buffer));
                 strcpy(buffer, string_c_str(temp_buffer));
-                free(temp_buffer);
+                string_free(&temp_buffer);
 
                 if(buffer[0] == 0 || buffer[0] == ';' || buffer[0] == '#')
                 {
@@ -157,12 +177,21 @@ configuration_t* configuration_allocate(const char* filename)
                 string_t* value = NULL;
 
                 string_split_key_value_by_char(buffer_str, '=', &key, &value);
+
+                if (key == NULL || value == NULL)
+                {
+                    string_free(&key);
+                    string_free(&value);
+                    string_free(&buffer_str);
+                    continue;
+                }
+
                 string_all_trim(key);
                 string_all_trim(value);
 
                 configuration_internal_add_key_value(ptr, current_section, string_c_str(key), string_c_str(value));
-                free(key);
-                free(value);
+                string_free(&key);
+                string_free(&value);
                 string_free(&buffer_str);
             }
         }
@@ -247,11 +276,15 @@ string_list_t*  configuration_get_all_keys(const configuration_t *config, const 
     }
 
     const section_t* curr_section = configuration_internal_get_section(config, section);
+
+    if (curr_section == NULL)
+    {
+        return NULL;
+    }
+
     key_value_t* curr_kv = NULL;
 
     string_list_t* buffer = string_list_allocate_default();
-
-    long len = curr_section->key_value_count + 1;
 
     if(buffer == NULL)
     {

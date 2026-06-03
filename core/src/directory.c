@@ -31,19 +31,35 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdlib.h>
 #include <memory.h>
+#include <string.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
+static const char* dir_internal_get_user()
+{
+    const char* user = getenv("USER");
+    if(user == NULL || user[0] == 0)
+    {
+        return "root";
+    }
+
+    return user;
+}
+
 bool dir_is_exists(const string_t* dirname)
 {
+    if(dirname == NULL || string_c_str((string_t*)dirname) == NULL)
+    {
+        return false;
+    }
+
     DIR* dirp;
 
     dirp = opendir(string_c_str((string_t*)dirname));
 
     if(dirp == NULL)
     {
-        closedir(dirp);
         return false;
     }
 
@@ -64,7 +80,16 @@ bool dir_create_directory(const string_t* dirname)
 
 string_t* dir_get_parent_directory(const string_t* dirname)
 {
+    if(dirname == NULL || string_c_str((string_t*)dirname) == NULL)
+    {
+        return NULL;
+    }
+
 	size_t origlen = string_get_length((string_t*)dirname);
+    if(origlen < 2)
+    {
+        return NULL;
+    }
 
 	char* parent_dir = (char*)calloc(1, sizeof(char) * (origlen + 1));
 
@@ -75,34 +100,25 @@ string_t* dir_get_parent_directory(const string_t* dirname)
 
 	memcpy(parent_dir, string_c_str((string_t*)dirname), origlen);
 
-	int len = (int)strlen(parent_dir);
+    char* sep = strrchr(parent_dir, '/');
 
-	if(len < 2)
+    if(sep == NULL)
     {
         free(parent_dir);
-		return NULL;
+        return NULL;
     }
 
-	int ctr = len - 1;
-
-	while(true)
-	{
-		parent_dir[ctr] = 0;
-		ctr--;
-        if(parent_dir[ctr] == '/')
-		{
-			break;
-		}
-	}
+    *sep = 0;
 
     string_t* retval = string_allocate(parent_dir);
+    free(parent_dir);
 
 	return retval;
 }
 
 string_t* dir_get_temp_directory()
 {
-    char* ptr = getenv("USER");
+    const char* ptr = dir_internal_get_user();
     string_t* retval = NULL;
 
     if(strcmp(ptr, "root") ==0)
@@ -120,7 +136,7 @@ string_t* dir_get_temp_directory()
 
 string_t* dir_get_log_directory()
 {
-    char* ptr = getenv("USER");
+    const char* ptr = dir_internal_get_user();
     string_t* retval = NULL;
 
     if(strcmp(ptr, "root") ==0)
@@ -138,7 +154,7 @@ string_t* dir_get_log_directory()
 
 string_t* dir_get_config_directory()
 {
-    char* ptr = getenv("USER");
+    const char* ptr = dir_internal_get_user();
     string_t* retval = NULL;
 
     if(strcmp(ptr, "root") ==0)

@@ -34,21 +34,48 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 void keyvalue_copy(key_value_t* dest, key_value_t* orig)
 {
-	buffer_copy(dest->Key, orig->Key);
-	buffer_copy(dest->Value, orig->Value);
+	if (dest == NULL || orig == NULL)
+	{
+		return;
+	}
+
+	if (dest->Key != NULL && orig->Key != NULL)
+	{
+		buffer_copy(dest->Key, orig->Key);
+	}
+
+	if (dest->Value != NULL && orig->Value != NULL)
+	{
+		buffer_copy(dest->Value, orig->Value);
+	}
 }
 
 bool keyvalue_is_equal(key_value_t* first, key_value_t* second)
 {
+    if (first == NULL || second == NULL || first->Key == NULL || second->Key == NULL)
+    {
+        return false;
+    }
+
     return buffer_is_equal(first->Key, second->Key);
 }
 
 bool keyvalue_is_greater(key_value_t* first, key_value_t* second)
 {
+    if (first == NULL || second == NULL || first->Key == NULL || second->Key == NULL)
+    {
+        return false;
+    }
+
     return buffer_is_greater(first->Key, second->Key);
 }
 
 bool keyvalue_is_less(key_value_t* first, key_value_t* second)
 {
+    if (first == NULL || second == NULL || first->Key == NULL || second->Key == NULL)
+    {
+        return false;
+    }
+
     return buffer_is_less(first->Key, second->Key);
 }

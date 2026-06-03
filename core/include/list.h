@@ -47,7 +47,6 @@ extern LIBRARY_EXPORT void list_insert(list_t* lptr, void* data, size_t sz, long
 
 extern LIBRARY_EXPORT void list_remove_from_head(list_t* lptr);
 extern LIBRARY_EXPORT void list_remove_from_tail(list_t* lptr);
-extern LIBRARY_EXPORT void list_remove(list_t* lptr, const void* data);
 extern LIBRARY_EXPORT void list_remove_at(list_t* lptr, long pos);
 extern LIBRARY_EXPORT void list_remove_value(list_t* lptr, void* data, size_t sz);
 

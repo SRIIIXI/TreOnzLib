@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdint.h>
 
 typedef struct buffer_t
 {
@@ -44,18 +45,54 @@ typedef struct buffer_t
 }buffer_t;
 
 buffer_t* buffer_internal_adjust_storage(buffer_t* buffer_ptr, size_t sz);
+static size_t buffer_internal_page_size(void);
+static size_t buffer_internal_initial_capacity(size_t sz);
+
+static size_t buffer_internal_page_size(void)
+{
+    long psize = sysconf(_SC_PAGESIZE);
+
+    if (psize <= 0)
+    {
+        return 4096;
+    }
+
+    return (size_t)psize;
+}
+
+static size_t buffer_internal_initial_capacity(size_t sz)
+{
+    size_t page = buffer_internal_page_size();
+
+    if (sz == 0)
+    {
+        return page;
+    }
+
+    if (sz > page)
+    {
+        return sz;
+    }
+
+    return page;
+}
 
 buffer_t* buffer_allocate(const void *data, size_t sz)
 {
+    if (data == NULL && sz > 0)
+    {
+        return NULL;
+    }
+
     buffer_t* nd = (buffer_t*)calloc(1, sizeof(buffer_t));
 
     if(nd != NULL)
     {
-        nd->memory_size = sysconf(_SC_PAGESIZE);
+        nd->memory_size = buffer_internal_initial_capacity(sz);
         nd->data_size = sz;
         nd->data = (char*)calloc(nd->memory_size, sizeof (char));
 
-        if(nd->data != NULL)
+        if(nd->data != NULL && data != NULL && sz > 0)
         {
             memcpy(nd->data, data, sz);
         }
@@ -69,7 +106,7 @@ buffer_t* buffer_allocate_default(void)
 
     if(nd != NULL)
     {
-        nd->memory_size = sysconf(_SC_PAGESIZE);
+        nd->memory_size = buffer_internal_page_size();
         nd->data_size = 0;
         nd->data = (char*)calloc(nd->memory_size, sizeof (char));
     }
@@ -82,9 +119,9 @@ buffer_t* buffer_allocate_length(size_t len)
 
     if(nd != NULL)
     {
-        nd->memory_size = len;
+        nd->memory_size = len > 0 ? len : 1;
         nd->data_size = 0;
-        nd->data = (char*)calloc(len, sizeof (char));
+        nd->data = (char*)calloc(nd->memory_size, sizeof (char));
     }
     return nd;
 }
@@ -102,10 +139,11 @@ buffer_t* buffer_copy(buffer_t* dest, buffer_t* orig)
                 dest->data_size = 0;
             }
 
-            dest->data = (char*)calloc(1, dest->data_size);
+            dest->memory_size = orig->memory_size > 0 ? orig->memory_size : 1;
+            dest->data = (char*)calloc(1, dest->memory_size);
             if (dest->data)
             {
-                memcpy(dest->data, orig->data, dest->data_size);
+                memcpy(dest->data, orig->data, orig->data_size);
                 dest->data_size = orig->data_size;
             }
         }
@@ -129,6 +167,12 @@ buffer_t *buffer_append(buffer_t* dest, const void *data, size_t sz)
     else
     {
         dest = buffer_internal_adjust_storage(dest, sz);
+
+        if (dest == NULL || dest->data == NULL || (dest->memory_size - dest->data_size) < sz)
+        {
+            return NULL;
+        }
+
         memcpy(&dest->data[dest->data_size], data, sz);
         dest->data_size = dest->data_size + sz;
     }
@@ -138,33 +182,37 @@ buffer_t *buffer_append(buffer_t* dest, const void *data, size_t sz)
 
 void buffer_remove(buffer_t* ptr, size_t start, size_t len)
 {
-    if(ptr == NULL || len < 1 || start < 0)
+    if(ptr == NULL || ptr->data == NULL || len < 1)
     {
         return;
     }
 
-    if(start >= 0 && start <= ptr->data_size)
+    if(start > ptr->data_size || len > (ptr->data_size - start))
     {
-        memcpy(ptr->data+start, ptr->data+start+len, ptr->data_size-len);
-        buffer_remove_end(ptr, len);
+        return;
     }
+
+    size_t old_size = ptr->data_size;
+    size_t move_bytes = old_size - (start + len);
+
+    if (move_bytes > 0)
+    {
+        memmove(ptr->data + start, ptr->data + start + len, move_bytes);
+    }
+
+    memset(ptr->data + old_size - len, 0, len);
+    ptr->data_size = old_size - len;
 }
 
 void buffer_remove_end(buffer_t* ptr, size_t len)
 {
-    if(ptr == NULL || len < 1)
+    if(ptr == NULL || ptr->data == NULL || len < 1 || len > ptr->data_size)
     {
         return;
     }
 
-    size_t pos = 0;
-
-    pos = ptr->data_size - len;
-
-    for(size_t index = ptr->data_size; index > pos; index--)
-    {
-        ptr->data[index] = 0;
-    }
+    size_t pos = ptr->data_size - len;
+    memset(ptr->data + pos, 0, len);
 
     ptr->data_size = ptr->data_size - len;
 
@@ -174,7 +222,6 @@ void buffer_remove_end(buffer_t* ptr, size_t len)
 void buffer_remove_start(buffer_t* ptr, size_t len)
 {
     buffer_remove(ptr, 0, len);
-    buffer_remove_end(ptr, len);
 }
 
 void buffer_free(buffer_t** ptr)
@@ -316,20 +363,36 @@ buffer_t* buffer_internal_adjust_storage(buffer_t* buffer_ptr, size_t sz)
         return NULL;
     }
 
-    size_t buffer_remaining = buffer_ptr->memory_size - buffer_ptr->data_size;
-
-    if(buffer_remaining < sz)
+    if (buffer_ptr->data == NULL)
     {
-        void* ptr = (char*)calloc(buffer_ptr->memory_size*2, sizeof (char));
+        return NULL;
+    }
 
-        if (ptr)
+    if (sz <= (buffer_ptr->memory_size - buffer_ptr->data_size))
+    {
+        return buffer_ptr;
+    }
+
+    size_t new_size = buffer_ptr->memory_size;
+
+    while ((new_size - buffer_ptr->data_size) < sz)
+    {
+        if (new_size > (SIZE_MAX / 2))
         {
-            buffer_ptr->memory_size = buffer_ptr->memory_size*2;
-            memcpy(ptr, buffer_ptr->data, buffer_ptr->data_size);
-            free(buffer_ptr->data);
-            buffer_ptr->data = ptr;
+            return buffer_ptr;
         }
 
+        new_size = new_size * 2;
+    }
+
+    void* ptr = (char*)calloc(new_size, sizeof (char));
+
+    if (ptr)
+    {
+        memcpy(ptr, buffer_ptr->data, buffer_ptr->data_size);
+        free(buffer_ptr->data);
+        buffer_ptr->data = ptr;
+        buffer_ptr->memory_size = new_size;
     }
 
     return  buffer_ptr;
@@ -339,15 +402,25 @@ string_t* buffer_convert_to_string(buffer_t* ptr)
 {
     if(ptr == NULL)
     {
-        return false;
+        return NULL;
     }
 
     //The caller must be absolutely sure that the buffer contains a string
 
-    char term[2] = {0};
-    buffer_append(ptr, term, 1);
-    
-    string_t* resp = string_allocate(buffer_get_data(ptr));
+    char* temp = (char*)calloc(ptr->data_size + 1, sizeof(char));
+
+    if (temp == NULL)
+    {
+        return NULL;
+    }
+
+    if (ptr->data_size > 0)
+    {
+        memcpy(temp, ptr->data, ptr->data_size);
+    }
+
+    string_t* resp = string_allocate(temp);
+    free(temp);
 
     return resp;
 }

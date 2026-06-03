@@ -32,6 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <limits.h>
 
 /* ------------------------------------------------------------------------- */
 /* Structures                                                                */
@@ -492,7 +493,16 @@ static json_node_t *parse_value(const char **p)
     {
         *p = s + 4;
         json_node_t *n = node_new(JSON_NODE_BOOLEAN);
+        if (!n)
+            return NULL;
+
         n->text = xstrdup("true");
+        if (!n->text)
+        {
+            node_free_recursive(n);
+            return NULL;
+        }
+
         return n;
     }
 
@@ -500,7 +510,16 @@ static json_node_t *parse_value(const char **p)
     {
         *p = s + 5;
         json_node_t *n = node_new(JSON_NODE_BOOLEAN);
+        if (!n)
+            return NULL;
+
         n->text = xstrdup("false");
+        if (!n->text)
+        {
+            node_free_recursive(n);
+            return NULL;
+        }
+
         return n;
     }
 
@@ -508,7 +527,16 @@ static json_node_t *parse_value(const char **p)
     {
         *p = s + 4;
         json_node_t *n = node_new(JSON_NODE_NULL);
+        if (!n)
+            return NULL;
+
         n->text = xstrdup("null");
+        if (!n->text)
+        {
+            node_free_recursive(n);
+            return NULL;
+        }
+
         return n;
     }
 
@@ -546,6 +574,13 @@ json_document_t *json_parse_string(const char *input)
     }
 
     json_node_t *docroot = node_new(JSON_NODE_DOCUMENT);
+    if (!docroot)
+    {
+        node_free_recursive(rootval);
+        xfree_ptr(doc);
+        return NULL;
+    }
+
     node_append_child(docroot, rootval);
     doc->root = docroot;
 
@@ -561,8 +596,25 @@ json_document_t *json_load_file(const char *path)
     if (!f)
         return NULL;
 
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0)
+    {
+        fclose(f);
+        return NULL;
+    }
+
     long sz = ftell(f);
+    if (sz < 0)
+    {
+        fclose(f);
+        return NULL;
+    }
+
+    if ((unsigned long)sz > (unsigned long)SIZE_MAX - 1)
+    {
+        fclose(f);
+        return NULL;
+    }
+
     rewind(f);
 
     char *buf = (char *)xmalloc((size_t)sz + 1);
@@ -572,7 +624,14 @@ json_document_t *json_load_file(const char *path)
         return NULL;
     }
 
-    fread(buf, 1, (size_t)sz, f);
+    size_t read_sz = fread(buf, 1, (size_t)sz, f);
+    if (read_sz != (size_t)sz)
+    {
+        xfree_ptr(buf);
+        fclose(f);
+        return NULL;
+    }
+
     buf[sz] = '\0';
     fclose(f);
 

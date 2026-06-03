@@ -85,7 +85,8 @@ logger_t*  logger_allocate_file(size_t flszmb, const char* filename)
     }
 
     logger_ptr->LogFileSizeMB = flszmb;
-    strncpy(logger_ptr->FileName, filename, 1024);
+    strncpy(logger_ptr->FileName, filename, MAX_PATHLEN);
+    logger_ptr->FileName[MAX_PATHLEN] = 0;
 
     logger_ptr->log_level = LOG_INFO;
     logger_ptr->console_out = false;
@@ -112,18 +113,26 @@ logger_t*	logger_allocate(size_t flszmb, const char* dirpath)
 
     logger_ptr->LogFileSizeMB = flszmb;
 
-    if(dirpath != NULL)
+    if(dirpath != NULL && dirpath[0] != 0)
     {
-        strcat(logger_ptr->FileName, dirpath);
+        strncat(logger_ptr->FileName, dirpath, MAX_PATHLEN - strlen(logger_ptr->FileName));
 
-        if(dirpath[strlen(dirpath) - 1] != '/')
+        size_t dn_len = strlen(logger_ptr->FileName);
+
+        if(dn_len > 0 && logger_ptr->FileName[dn_len - 1] != '/')
         {
-            strcat(logger_ptr->FileName, "/");
+            strncat(logger_ptr->FileName, "/", MAX_PATHLEN - strlen(logger_ptr->FileName));
         }
     }
     else
     {
         string_t* logdir = dir_get_log_directory();
+        if(logdir == NULL)
+        {
+            free(logger_ptr);
+            return NULL;
+        }
+
         memset(&logger_ptr->FileName[0], 0, MAX_PATHLEN + 1);
         strncpy(&logger_ptr->FileName[0], string_c_str(logdir), MAX_PATHLEN);
         string_free(&logdir);
@@ -139,9 +148,17 @@ logger_t*	logger_allocate(size_t flszmb, const char* dirpath)
     string_free(&dir_t_str);
     
     string_t* process_name = env_get_current_process_name();
-    strcat(logger_ptr->FileName, string_c_str(process_name));
-    strcat(logger_ptr->FileName, ".log");
-    string_free(&process_name);
+    if(process_name != NULL)
+    {
+        strncat(logger_ptr->FileName, string_c_str(process_name), MAX_PATHLEN - strlen(logger_ptr->FileName));
+        string_free(&process_name);
+    }
+    else
+    {
+        strncat(logger_ptr->FileName, "process", MAX_PATHLEN - strlen(logger_ptr->FileName));
+    }
+
+    strncat(logger_ptr->FileName, ".log", MAX_PATHLEN - strlen(logger_ptr->FileName));
 
     logger_ptr->log_level = LOG_INFO;
     logger_ptr->console_out = false;
@@ -177,7 +194,12 @@ void logger_release(logger_t* loggerptr)
 
 bool logger_write(logger_t* loggerptr, const char* logentry, LogLevel llevel, const char* func, const char* file, int line)
 {
-    if(!loggerptr)
+    if(!loggerptr || logentry == NULL || func == NULL || file == NULL)
+    {
+        return false;
+    }
+
+    if(llevel < LOG_INFO || llevel > LOG_PANIC)
     {
         return false;
     }
@@ -228,6 +250,11 @@ bool logger_write(logger_t* loggerptr, const char* logentry, LogLevel llevel, co
     time(&t);
     tmp = localtime(&t);
 
+    if(tmp == NULL)
+    {
+        return false;
+    }
+
     // Timestamp
     fprintf(loggerptr->FileHandle, "%02d-%02d-%04d %02d:%02d:%02d\t",
              tmp->tm_mday, (tmp->tm_mon+1), (tmp->tm_year+1900),
@@ -237,14 +264,37 @@ bool logger_write(logger_t* loggerptr, const char* logentry, LogLevel llevel, co
     fprintf(loggerptr->FileHandle, "%s\t", log_level_names[llevel]);
 
     // File
-    char* base_file_name = file_get_basename(file);
-    fprintf(loggerptr->FileHandle, "%s\t", base_file_name);
+    const char* slash = strrchr(file, '/');
+    const char* bslash = strrchr(file, '\\');
+    const char* base_file_name = file;
+
+    if (slash != NULL || bslash != NULL)
+    {
+        const char* last_sep = slash;
+        if (last_sep == NULL || (bslash != NULL && bslash > last_sep))
+        {
+            last_sep = bslash;
+        }
+
+        if (last_sep != NULL && *(last_sep + 1) != 0)
+        {
+            base_file_name = last_sep + 1;
+        }
+    }
+
+    const char* file_name_to_write = base_file_name;
+    fprintf(loggerptr->FileHandle, "%s\t", file_name_to_write);
 
     // Line
     fprintf(loggerptr->FileHandle, "%d\t", line);
 
     // Function
     char* func_name = (char*)calloc(1, strlen(func)+1);
+    if(func_name == NULL)
+    {
+        return false;
+    }
+
     strcpy(func_name, func);
     normalize_function_name(func_name);
     fprintf(loggerptr->FileHandle, "%s\t", func_name);
@@ -260,11 +310,10 @@ bool logger_write(logger_t* loggerptr, const char* logentry, LogLevel llevel, co
 
     if(loggerptr->console_out)
     {
-        printf("%s %d %s %s\n", base_file_name, line, func, logentry);
+        printf("%s %d %s %s\n", file_name_to_write, line, func, logentry);
         fflush(stdout);
     }
 
-    free(base_file_name);
     free(func_name);
 
     return true;
@@ -292,12 +341,22 @@ void logger_set_log_level(logger_t* loggerptr, LogLevel llevel)
 
 void normalize_function_name(char* func_name)
 {
+    if(func_name == NULL)
+    {
+        return;
+    }
+
     string_t* func_name_str = string_allocate(func_name);
+    if(func_name_str == NULL)
+    {
+        return;
+    }
 
     int len = (int)strlen(func_name);
 
     if(len < 2)
     {
+        string_free(&func_name_str);
         return;
     }
 

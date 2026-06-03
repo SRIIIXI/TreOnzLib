@@ -38,6 +38,12 @@ typedef struct variant_t
     size_t DataSize;
 }variant_t;
 
+static size_t variant_internal_string_len(size_t ln)
+{
+	/* Keep one byte for null terminator when storing string payload. */
+	return ln > (sizeof(((variant_t*)0)->RawBuffer) - 1) ? (sizeof(((variant_t*)0)->RawBuffer) - 1) : ln;
+}
+
 variant_t*  variant_allocate_default()
 {
 	variant_t* retval = (variant_t*)calloc(1, sizeof(variant_t));
@@ -97,6 +103,11 @@ variant_t* variant_allocate_unsigned_char(unsigned char ch)
 
 variant_t* variant_allocate_string(const char* str, size_t ln)
 {
+    if (str == NULL)
+    {
+        return NULL;
+    }
+
 	variant_t* retval = (variant_t*)calloc(1, sizeof(variant_t));
 
 	if(retval == NULL)
@@ -104,9 +115,13 @@ variant_t* variant_allocate_string(const char* str, size_t ln)
 		return NULL;
 	}
 
-	retval->DataSize = ln > 255 ? 255 : ln;
+	retval->DataSize = variant_internal_string_len(ln);
 	retval->DataType = String;
-	memcpy(&retval->RawBuffer[0], str, ln > 255 ? 255 : ln);
+	if (retval->DataSize > 0)
+	{
+		memcpy(&retval->RawBuffer[0], str, retval->DataSize);
+	}
+	retval->RawBuffer[retval->DataSize] = 0;
 
 	return retval;
 }
@@ -194,14 +209,17 @@ variant_t* variant_allocate_time_value(unsigned long val)
 
 void variant_set_variant(variant_t* varptr, variant_t* val)
 {
-	if(varptr == NULL)
+	if(varptr == NULL || val == NULL)
 	{
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
-	memcpy(&varptr->RawBuffer[0], &val->RawBuffer[0], val->DataSize);
-	varptr->DataSize = val->DataSize;
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
+	varptr->DataSize = val->DataSize > sizeof(varptr->RawBuffer) ? sizeof(varptr->RawBuffer) : val->DataSize;
+	if (varptr->DataSize > 0)
+	{
+		memcpy(&varptr->RawBuffer[0], &val->RawBuffer[0], varptr->DataSize);
+	}
 	varptr->DataType = val->DataType;
 }
 
@@ -212,7 +230,7 @@ void variant_set_char(variant_t* varptr, char ch)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	varptr->RawBuffer[0] = ch;
 	varptr->DataSize = sizeof(char);
 	varptr->DataType = Char;
@@ -225,7 +243,7 @@ void variant_set_unsigned_char(variant_t* varptr, unsigned char ch)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	varptr->RawBuffer[0] = ch;
 	varptr->DataSize = sizeof(unsigned char);
 	varptr->DataType = UnsignedChar;
@@ -238,9 +256,13 @@ void variant_set_string(variant_t* varptr, const char* str, size_t ln)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
-	memcpy(&varptr->RawBuffer[0], str, ln > 255 ? 255 : ln);
-	varptr->DataSize = ln > 255 ? 255 : ln;
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
+	varptr->DataSize = variant_internal_string_len(ln);
+	if (varptr->DataSize > 0)
+	{
+		memcpy(&varptr->RawBuffer[0], str, varptr->DataSize);
+	}
+	varptr->RawBuffer[varptr->DataSize] = 0;
 	varptr->DataType = String;
 }
 
@@ -251,7 +273,7 @@ void variant_set_bool(variant_t* varptr, bool fl)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	varptr->RawBuffer[0] = fl;
 	varptr->DataSize = sizeof(bool);
 	varptr->DataType = Boolean;
@@ -264,7 +286,7 @@ void variant_set_long(variant_t* varptr, long val)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	memcpy(&varptr->RawBuffer[0], &val, sizeof(long));
 	varptr->DataSize = sizeof(long);
 	varptr->DataType = Number;
@@ -277,7 +299,7 @@ void variant_set_unsigned_long(variant_t* varptr, unsigned long val)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	memcpy(&varptr->RawBuffer[0], &val, sizeof(unsigned long));
 	varptr->DataSize = sizeof(unsigned long);
 	varptr->DataType = UnsignedNumber;
@@ -290,7 +312,7 @@ void variant_set_double(variant_t* varptr, double val)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	memcpy(&varptr->RawBuffer[0], &val, sizeof(double));
 	varptr->DataSize = sizeof(double);
 	varptr->DataType = Decimal;
@@ -303,7 +325,7 @@ void variant_set_time_value(variant_t* varptr, unsigned long val)
 		return;
 	}
 
-	memset(&varptr->RawBuffer[0], 0, sizeof(variant_t));
+	memset(&varptr->RawBuffer[0], 0, sizeof(varptr->RawBuffer));
 	memcpy(&varptr->RawBuffer[0], &val, sizeof(unsigned long));
 	varptr->DataSize = sizeof(unsigned long);
 	varptr->DataType = DateTimeStamp;

@@ -69,6 +69,12 @@ unsigned long dictionary_internal_get_hash(const void* key, const size_t key_siz
 dictionary_t* dictionary_allocate()
 {
     dictionary_t* ptr = (dictionary_t*)calloc(1, sizeof (dictionary_t));
+
+    if (ptr == NULL)
+    {
+        return NULL;
+    }
+
     ptr->hash_bucket = NULL;
     ptr->hash_count = 0;
     return ptr;
@@ -113,115 +119,112 @@ void dictionary_free(dictionary_t* dict_ptr)
 
 void dictionary_set_value(dictionary_t *dict_ptr, const void* key, const size_t key_size, const void* value, const size_t value_size)
 {
-    if(dict_ptr == NULL)
+    if(dict_ptr == NULL || key == NULL || key_size == 0 || value == NULL || value_size == 0)
     {
         return;
     }
-
-    unsigned long current_hash = dictionary_internal_get_hash(key, key_size);
 
     hash_bucket_t* current_hash_bucket = dict_ptr->hash_bucket;
 
     while(current_hash_bucket != NULL)
     {
-        if(current_hash_bucket->hash == current_hash)
-        {
-            key_value_t* current_kv = current_hash_bucket->key_value_list;
+        key_value_t* current_kv = current_hash_bucket->key_value_list;
 
-            while(current_kv)
+        while(current_kv)
+        {
+            if(current_kv->key_size == key_size && memcmp(current_kv->key, key, key_size) == 0)
             {
-                if(memcmp(current_kv->key, key, key_size) == 0)
+                if (current_kv->is_value)
                 {
                     free(current_kv->value);
-                    current_kv->value = calloc(value_size, sizeof(char));
-                    current_kv->is_value = true;
-                    memcpy(current_kv->value, value, value_size);
+                }
+
+                current_kv->value = calloc(1, value_size);
+
+                if (current_kv->value == NULL)
+                {
+                    current_kv->is_value = false;
+                    current_kv->value_size = 0;
                     return;
                 }
 
-                current_kv = current_kv->next;
+                current_kv->is_value = true;
+                current_kv->value_size = value_size;
+                memcpy(current_kv->value, value, value_size);
+                return;
             }
 
-            dictionary_internal_add_key_value(dict_ptr, current_hash, key, key_size, value, value_size);
+            current_kv = current_kv->next;
         }
 
         current_hash_bucket = current_hash_bucket->next;
     }
 
+    unsigned long current_hash = dictionary_internal_get_hash(key, key_size);
     dictionary_internal_add_hash_bucket(dict_ptr, key, key_size);
     dictionary_internal_add_key_value(dict_ptr, current_hash, key, key_size, value, value_size);
-
-    return;
 }
 
 void dictionary_set_reference(dictionary_t* dict_ptr, const void* key, const size_t key_size, const void* reference)
 {
-    if(dict_ptr == NULL)
+    if(dict_ptr == NULL || key == NULL || key_size == 0 || reference == NULL)
     {
         return;
     }
-
-    unsigned long current_hash = dictionary_internal_get_hash(key, key_size);
 
     hash_bucket_t* current_hash_bucket = dict_ptr->hash_bucket;
 
     while(current_hash_bucket != NULL)
     {
-        if(current_hash_bucket->hash == current_hash)
-        {
-            key_value_t* current_kv = current_hash_bucket->key_value_list;
+        key_value_t* current_kv = current_hash_bucket->key_value_list;
 
-            while(current_kv)
+        while(current_kv)
+        {
+            if(current_kv->key_size == key_size && memcmp(current_kv->key, key, key_size) == 0)
             {
-                if(memcmp(current_kv->key, key, key_size) == 0)
+                if (current_kv->is_value)
                 {
                     free(current_kv->value);
-                    current_kv->value = (void*)reference;
-                    current_kv->is_value = false;
-                    return;
                 }
 
-                current_kv = current_kv->next;
+                current_kv->value = (void*)reference;
+                current_kv->is_value = false;
+                current_kv->value_size = 0;
+                return;
             }
 
-            dictionary_internal_add_key_reference(dict_ptr, current_hash, key, key_size, reference);
+            current_kv = current_kv->next;
         }
 
         current_hash_bucket = current_hash_bucket->next;
     }
 
+    unsigned long current_hash = dictionary_internal_get_hash(key, key_size);
     dictionary_internal_add_hash_bucket(dict_ptr, key, key_size);
     dictionary_internal_add_key_reference(dict_ptr, current_hash, key, key_size, reference);
-
-    return;
 }
 
 void* dictionary_get_value(dictionary_t* dict_ptr, const void *key, const size_t key_size)
 {
-    if(dict_ptr == NULL)
+    if(dict_ptr == NULL || key == NULL || key_size == 0)
     {
         return NULL;
     }
-
-    unsigned long current_hash = dictionary_internal_get_hash(key, key_size);
 
     hash_bucket_t* current_hash_bucket = dict_ptr->hash_bucket;
 
     while(current_hash_bucket != NULL)
     {
-        if(current_hash_bucket->hash == current_hash)
+        key_value_t* current_kv = current_hash_bucket->key_value_list;
+
+        while(current_kv)
         {
-            key_value_t* current_kv = current_hash_bucket->key_value_list;
-
-            while(current_kv)
+            if(current_kv->key_size == key_size && memcmp(current_kv->key, key, key_size) == 0)
             {
-                if(memcmp(current_kv->key, key, key_size) == 0)
-                {
-                    return current_kv->value;
-                }
-
-                current_kv = current_kv->next;
+                return current_kv->value;
             }
+
+            current_kv = current_kv->next;
         }
 
         current_hash_bucket = current_hash_bucket->next;
@@ -271,7 +274,7 @@ char** dictionary_get_all_keys(dictionary_t* dict_ptr)
 
 void dictionary_free_key_list(dictionary_t* dict_ptr, char **key_list)
 {
-    if(dict_ptr == NULL)
+    if(dict_ptr == NULL || key_list == NULL)
     {
         return;
     }

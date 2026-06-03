@@ -42,6 +42,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Global lock file descriptor - module static
 static int g_lock_file_descriptor = -1;
 
+static const char* env_internal_get_user_name()
+{
+    const char* user = getenv("USER");
+    if(user == NULL || user[0] == 0)
+    {
+        return "root";
+    }
+
+    return user;
+}
+
 string_t* env_get_current_process_name()
 {
     string_t* retval = NULL;
@@ -53,6 +64,11 @@ string_t* env_get_current_process_name()
     char buffer[1025] = {0};
 
     char* procfilename = (char*)calloc(1, 32);
+    if(procfilename == NULL)
+    {
+        return NULL;
+    }
+
     sprintf(procfilename, "/proc/%d/cmdline", proc_id);
     FILE* fp = fopen(procfilename, "r");
     free(procfilename);
@@ -103,7 +119,10 @@ string_t* env_get_current_process_name()
             }
 
             retval = string_allocate(buffer);
-            retval = string_all_trim(retval);
+            if(retval != NULL)
+            {
+                retval = string_all_trim(retval);
+            }
         }
 
         fclose(fp);
@@ -114,7 +133,7 @@ string_t* env_get_current_process_name()
 
 string_t* env_get_current_user_name()
 {
-    string_t* ptr = string_allocate(getenv("USER"));
+    string_t* ptr = string_allocate(env_internal_get_user_name());
     return ptr;
 }
 
@@ -129,16 +148,34 @@ string_t* env_get_lock_filename()
     }
     
     temp = dir_get_temp_directory();
+    if (temp == NULL)
+    {
+        string_free(&lock_filename);
+        return NULL;
+    }
+
     string_append_string(lock_filename, temp);
     string_free(&temp);
     string_append_char(lock_filename, '/');
 
     temp = env_get_current_process_name();
+    if (temp == NULL)
+    {
+        string_free(&lock_filename);
+        return NULL;
+    }
+
     string_append_string(lock_filename, temp);
     string_free(&temp);
     string_append_char(lock_filename, '.');
 
     temp = env_get_current_user_name();
+    if (temp == NULL)
+    {
+        string_free(&lock_filename);
+        return NULL;
+    }
+
     string_append_string(lock_filename, temp);
     string_free(&temp);
 
@@ -150,7 +187,7 @@ string_t* env_get_lock_filename()
 bool env_lock_process()
 {
     string_t* lock_filename = NULL;
-    const char* lock_path = NULL;
+    char* lock_path = NULL;
     
     // Already locked
     if (g_lock_file_descriptor != -1)
@@ -164,9 +201,9 @@ bool env_lock_process()
         return false;
     }
 
-    lock_path = string_c_str(lock_filename);
+    lock_path = strdup(string_c_str(lock_filename));
     string_free(&lock_filename);
-    
+
     if (lock_path == NULL)
     {
         return false;
@@ -182,6 +219,7 @@ bool env_lock_process()
         
         if (g_lock_file_descriptor == -1)
         {
+            free(lock_path);
             return false;
         }
     }
@@ -191,6 +229,7 @@ bool env_lock_process()
     {
         close(g_lock_file_descriptor);
         g_lock_file_descriptor = -1;
+        free(lock_path);
         return false;
     }
 
@@ -204,13 +243,15 @@ bool env_lock_process()
         // This is not critical, continue
     }
 
+    free(lock_path);
+
     return true;
 }
 
 bool env_unlock_process()
 {
     string_t* lock_filename = NULL;
-    const char* lock_path = NULL;
+    char* lock_path = NULL;
     
     // Not locked
     if (g_lock_file_descriptor == -1)
@@ -229,12 +270,13 @@ bool env_unlock_process()
     lock_filename = env_get_lock_filename();
     if (lock_filename != NULL)
     {
-        lock_path = string_c_str(lock_filename);
+        lock_path = strdup(string_c_str(lock_filename));
         string_free(&lock_filename);
         
         if (lock_path != NULL)
         {
             unlink(lock_path);
+            free(lock_path);
         }
     }
 
@@ -249,7 +291,7 @@ bool env_is_process_locked()
 pid_t env_get_lock_file_pid()
 {
     string_t* lock_filename = NULL;
-    const char* lock_path = NULL;
+    char* lock_path = NULL;
     FILE* fp = NULL;
     char buffer[32] = {0};
     pid_t locked_pid = 0;
@@ -260,7 +302,7 @@ pid_t env_get_lock_file_pid()
         return 0;
     }
 
-    lock_path = string_c_str(lock_filename);
+    lock_path = strdup(string_c_str(lock_filename));
     string_free(&lock_filename);
     
     if (lock_path == NULL)
@@ -269,6 +311,7 @@ pid_t env_get_lock_file_pid()
     }
 
     fp = fopen(lock_path, "r");
+    free(lock_path);
     
     if (fp == NULL)
     {

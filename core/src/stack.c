@@ -46,6 +46,12 @@ stack_t* stack_allocate(stack_t* sptr)
     if (sptr)
     {
         sptr->list = list_allocate(sptr->list);
+
+        if (sptr->list == NULL)
+        {
+            free(sptr);
+            return NULL;
+        }
     }
 
     return sptr;
@@ -73,12 +79,11 @@ void stack_free(stack_t* sptr)
         return;
     }
 
-    if (sptr->list == NULL)
+    if (sptr->list != NULL)
     {
-        return;
+        list_free(sptr->list);
     }
 
-    list_free(sptr->list);
     free(sptr);
 }
 
@@ -99,6 +104,11 @@ void stack_push(stack_t* sptr, void* data, size_t sz)
 
 void* stack_pop(stack_t* sptr, size_t* out_size)
 {
+    if (out_size != NULL)
+    {
+        *out_size = 0;
+    }
+
     if (sptr == NULL)
     {
         return NULL;
@@ -110,20 +120,29 @@ void* stack_pop(stack_t* sptr, size_t* out_size)
     }
 
     void* ptr = NULL;
+    void* out_ptr = NULL;
 
     size_t size = 0;
     ptr = list_get_last(sptr->list, &size);
-    list_remove_from_tail(sptr->list);
     if (ptr == NULL)
     {
         return NULL;
     }
 
+    out_ptr = calloc(1, size);
+    if (out_ptr == NULL)
+    {
+        return NULL;
+    }
+
+    memcpy(out_ptr, ptr, size);
+    list_remove_from_tail(sptr->list);
+
     if (out_size != NULL)
     {
         *out_size = size;
     }
-    return ptr;
+    return out_ptr;
 }
 
 long stack_item_count(stack_t* sptr)
@@ -141,6 +160,11 @@ long stack_item_count(stack_t* sptr)
 
 void* stack_peek(stack_t* sptr, size_t* out_size)
 {
+    if (out_size != NULL)
+    {
+        *out_size = 0;
+    }
+
     if (sptr == NULL)
     {
         return NULL;

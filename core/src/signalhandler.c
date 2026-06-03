@@ -109,6 +109,11 @@ void signals_initialize_handlers(void)
 
 void signal_handler_internal(int signum, siginfo_t *siginfo, void *context)
 {
+    if(callback_ptr == NULL)
+    {
+        return;
+    }
+
     switch(signum)
     {
         case SIGKILL:

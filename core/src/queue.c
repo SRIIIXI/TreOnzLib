@@ -46,6 +46,12 @@ queue_t* queue_allocate(queue_t* qptr)
     if (qptr)
     {
         qptr->list = list_allocate(qptr->list);
+
+        if (qptr->list == NULL)
+        {
+            free(qptr);
+            return NULL;
+        }
     }
 
     return qptr;
@@ -73,12 +79,11 @@ void queue_free(queue_t* qptr)
         return;
     }
 
-    if (qptr->list == NULL)
+    if (qptr->list != NULL)
     {
-        return;
+        list_free(qptr->list);
     }
 
-    list_free(qptr->list);
     free(qptr);
 }
 
@@ -99,6 +104,11 @@ void queue_enqueue(queue_t* qptr, void* data, size_t sz)
 
 void* queue_dequeue(queue_t* qptr, size_t* out_size)
 {
+    if (out_size != NULL)
+    {
+        *out_size = 0;
+    }
+
     if (qptr == NULL)
     {
         return NULL;
@@ -110,14 +120,31 @@ void* queue_dequeue(queue_t* qptr, size_t* out_size)
     }
 
     void* ptr = NULL;
+    void* out_ptr = NULL;
 
     size_t size = 0;
     ptr = list_get_last(qptr->list, &size);
+    if (ptr == NULL)
+    {
+        return NULL;
+    }
+
+    out_ptr = calloc(1, size);
+    if (out_ptr == NULL)
+    {
+        return NULL;
+    }
+
+    memcpy(out_ptr, ptr, size);
+
     list_remove_from_tail(qptr->list);
 
-    *out_size = size;
+    if (out_size != NULL)
+    {
+        *out_size = size;
+    }
 
-    return ptr;
+    return out_ptr;
 }
 
 long queue_item_count(queue_t* qptr)
@@ -135,6 +162,11 @@ long queue_item_count(queue_t* qptr)
 
 void* queue_peek(queue_t* qptr, size_t* out_size)
 {
+    if (out_size != NULL)
+    {
+        *out_size = 0;
+    }
+
     if (qptr == NULL)
     {
         return NULL;
@@ -150,7 +182,15 @@ void* queue_peek(queue_t* qptr, size_t* out_size)
     size_t size = 0;
     ptr = list_get_last(qptr->list, &size);
 
-    *out_size = size;
+    if (ptr == NULL)
+    {
+        return NULL;
+    }
+
+    if (out_size != NULL)
+    {
+        *out_size = size;
+    }
 
     return ptr;
 }

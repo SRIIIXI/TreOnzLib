@@ -40,6 +40,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 bool file_is_exists(const char* filename)
 {
+	if(filename == NULL || filename[0] == 0)
+	{
+		return false;
+	}
+
 	FILE* fp = fopen(filename, "r");
 
 	if(fp)
@@ -53,7 +58,16 @@ bool file_is_exists(const char* filename)
 
 char* file_get_parent_directory(const char* filename)
 {
+	if(filename == NULL || filename[0] == 0)
+	{
+		return NULL;
+	}
+
 	size_t origlen = strlen(filename);
+	if(origlen < 2)
+	{
+		return NULL;
+	}
 
 	char* parent_dir = (char*)calloc(1, sizeof(char) * (origlen + 1));
 
@@ -64,33 +78,38 @@ char* file_get_parent_directory(const char* filename)
 
 	memcpy(parent_dir, filename, origlen);
 
-	int len = (int)strlen(parent_dir);
+	char* last_sep = strrchr(parent_dir, '/');
+	char* last_bsep = strrchr(parent_dir, '\\');
+	char* sep = last_sep;
 
-	if(len < 2)
-    {
-        free(parent_dir);
-        return NULL;
-    }
-
-	int ctr = len - 1;
-
-	while(true)
+	if(sep == NULL || (last_bsep != NULL && last_bsep > sep))
 	{
-		parent_dir[ctr] = 0;
-		ctr--;
-		if(parent_dir[ctr] == '/' || parent_dir[ctr] == '\\')
-		{
-			break;
-		}
+		sep = last_bsep;
 	}
+
+	if(sep == NULL)
+	{
+		free(parent_dir);
+		return NULL;
+	}
+
+	*sep = 0;
 
 	return parent_dir;
 }
 
 char* file_get_basename(const char* filename)
 {
+	if(filename == NULL || filename[0] == 0)
+	{
+		return NULL;
+	}
+
 	size_t origlen = strlen(filename);
-	size_t index = 0;
+	if(origlen == 0)
+	{
+		return NULL;
+	}
 
 	char* basename = (char*)calloc(1, sizeof(char) * (origlen + 1));
 
@@ -99,17 +118,39 @@ char* file_get_basename(const char* filename)
 		return NULL;
 	}
 
-	for(index = origlen - 1; filename[index] != '/' && filename[index] != '\\'; index--) { }
+	const char* last_sep = strrchr(filename, '/');
+	const char* last_bsep = strrchr(filename, '\\');
+	const char* start = filename;
 
-	memcpy(basename, &filename[index + 1], index);
+	if(last_sep != NULL || last_bsep != NULL)
+	{
+		const char* sep = last_sep;
+		if(sep == NULL || (last_bsep != NULL && last_bsep > sep))
+		{
+			sep = last_bsep;
+		}
+		start = sep + 1;
+	}
+
+	size_t base_len = strlen(start);
+	memcpy(basename, start, base_len);
+	basename[base_len] = 0;
 
 	return basename;
 }
 
 char* file_get_extension(const char* filename)
 {
+	if(filename == NULL || filename[0] == 0)
+	{
+		return NULL;
+	}
+
     size_t origlen = strlen(filename);
-    size_t index = 0;
+    if(origlen == 0)
+    {
+        return NULL;
+    }
 
     char* extension = (char*)calloc(1, sizeof(char) * (origlen + 1));
 
@@ -118,9 +159,25 @@ char* file_get_extension(const char* filename)
         return NULL;
     }
 
-    for(index = origlen - 1; filename[index] != '.'; index--) { }
+	const char* last_dot = strrchr(filename, '.');
+	const char* last_sep = strrchr(filename, '/');
+	const char* last_bsep = strrchr(filename, '\\');
+	const char* last_path_sep = last_sep;
 
-    memcpy(extension, &filename[index+1], index-1);
+	if(last_path_sep == NULL || (last_bsep != NULL && last_bsep > last_path_sep))
+	{
+		last_path_sep = last_bsep;
+	}
+
+	if(last_dot == NULL || (last_path_sep != NULL && last_dot < last_path_sep) || *(last_dot + 1) == 0)
+	{
+		extension[0] = 0;
+		return extension;
+	}
+
+	size_t ext_len = strlen(last_dot + 1);
+	memcpy(extension, last_dot + 1, ext_len);
+	extension[ext_len] = 0;
 
     return extension;
 }

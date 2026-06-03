@@ -312,6 +312,11 @@ wchar_t *string_c_to_wstr(const char *str)
 
 wchar_t* string_to_wstr(const string_t* str)
 {
+    if (str == NULL)
+    {
+        return NULL;
+    }
+
     return string_c_to_wstr(str->data);
 }
 
@@ -347,6 +352,11 @@ string_t *string_from_wstr(const wchar_t *wstr)
 
 string_t* string_copy(string_t* dest, string_t* orig)
 {
+    if (dest == NULL || orig == NULL || dest->data == NULL || orig->data == NULL)
+    {
+        return NULL;
+    }
+
     if(orig->data_size > dest->data_size)
     {
         string_internal_adjust_storage(dest, orig->data_size);
@@ -358,8 +368,8 @@ string_t* string_copy(string_t* dest, string_t* orig)
         dest->data[ctr] = 0;
     }
     
-    // Deep copy the data
-    for(size_t ctr = 0; ctr < dest->memory_size; ctr++)
+    // Deep copy the source data and leave remaining destination bytes zeroed.
+    for(size_t ctr = 0; ctr < orig->data_size; ctr++)
     {
         dest->data[ctr] = orig->data[ctr];
     }    
@@ -1104,7 +1114,10 @@ void string_split_key_value_by_substr(const string_t *str, const char* delimiter
     if(pos > 0)
     {
         *key = string_allocate_length(pos + 1);
-        memcpy((*key)->data, str, pos);
+        if (*key != NULL)
+        {
+            memcpy((*key)->data, str->data, pos);
+        }
     }
 
     *value = string_allocate_length(val_end - val_start + 1);
@@ -1403,6 +1416,12 @@ void  string_append_to_list(string_list_t *strlist, const char *str)
     if (strlist->strings == NULL)
     {
         strlist->strings = (string_t*)calloc(1, sizeof(string_t));
+
+        if (strlist->strings == NULL)
+        {
+            string_free(&new_string);
+            return;
+        }
     }
     else
     {

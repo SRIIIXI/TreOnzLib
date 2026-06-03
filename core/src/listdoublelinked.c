@@ -190,48 +190,13 @@ void list_double_linked_remove_from_tail(list_double_linked_t* lptr)
     list_double_linked_remove_at(lptr, LONG_MAX);
 }
 
-void list_double_linked_remove(list_double_linked_t* lptr, const void *data)
-{
-    if (lptr == NULL || data == NULL)
-    {
-        return;
-    }
-
-    node_double_linked_t* curptr = lptr->head;
-
-    while (curptr != NULL)
-    {
-        if (memcmp(data, curptr->data, curptr->size) == 0)
-        {
-            if (curptr == lptr->head)
-            {
-                list_double_linked_internal_remove_from_head(lptr);
-                return;
-            }
-
-            if (curptr == lptr->tail)
-            {
-                list_double_linked_internal_remove_from_tail(lptr);
-                return;
-            }
-
-            // Middle node unlink
-            curptr->previous->next = curptr->next;
-            curptr->next->previous = curptr->previous;
-
-            free(curptr->data);
-            free(curptr);
-
-            lptr->count--;
-            return;
-        }
-
-        curptr = curptr->next;
-    }
-}
-
 void list_double_linked_remove_at(list_double_linked_t* lptr, long pos)
 {
+    if (pos == LONG_MAX && lptr != NULL)
+    {
+        pos = lptr->count - 1;
+    }
+
     if (lptr == NULL || pos < 0 || pos >= lptr->count)
     {
         return;
@@ -324,31 +289,18 @@ long list_double_linked_index_of(list_double_linked_t *lptr, const void *node)
         return -1;
     }
 
-    node_double_linked_t* ptr = NULL;
-
-    ptr = lptr->head;
-
+    node_double_linked_t* ptr = lptr->head;
     long idx = 0;
 
-    if(ptr->data == node)
+    while(ptr != NULL)
     {
-        return idx;
-    }
-
-    while(true)
-    {
-        if(ptr == NULL)
-        {
-            break;
-        }
-
-        ptr = ptr->next;
-        idx++;
-
         if(ptr->data == node)
         {
             return idx;
         }
+
+        ptr = ptr->next;
+        idx++;
     }
 
     return -1;
@@ -356,36 +308,23 @@ long list_double_linked_index_of(list_double_linked_t *lptr, const void *node)
 
 long list_double_linked_index_of_value(list_double_linked_t* lptr, void* data, size_t sz)
 {
-    if(lptr == NULL)
+    if(lptr == NULL || data == NULL || sz == 0)
     {
         return -1;
     }
 
-    node_double_linked_t* ptr = NULL;
-
-    ptr = lptr->head;
-
+    node_double_linked_t* ptr = lptr->head;
     long idx = 0;
 
-    if(memcmp(ptr->data, data, ptr->size) == 0 && ptr->size == sz)
+    while(ptr != NULL)
     {
-        return idx;
-    }
-
-    while(true)
-    {
-        if(ptr == NULL)
+        if(ptr->size == sz && memcmp(ptr->data, data, sz) == 0)
         {
-            break;
+            return idx;
         }
 
         ptr = ptr->next;
         idx++;
-
-        if(memcmp(ptr->data, data, ptr->size) == 0)
-        {
-            return idx;
-        }
     }
 
     return -1;
@@ -420,7 +359,7 @@ void *list_double_linked_get_at(list_double_linked_t* lptr, long atpos)
 
 void* list_double_linked_get_first(list_double_linked_t* lptr)
 {
-    if(lptr == NULL)
+    if(lptr == NULL || lptr->head == NULL)
     {
         return NULL;
     }
@@ -448,7 +387,7 @@ void* list_double_linked_get_next(list_double_linked_t* lptr)
 
 void* list_double_linked_get_last(list_double_linked_t* lptr)
 {
-    if(lptr == NULL|| lptr->iterator == NULL)
+    if(lptr == NULL || lptr->tail == NULL)
     {
         return NULL;
     }
@@ -459,7 +398,7 @@ void* list_double_linked_get_last(list_double_linked_t* lptr)
 
 void* list_double_linked_get_previous(list_double_linked_t* lptr)
 {
-    if(lptr == NULL)
+    if(lptr == NULL || lptr->iterator == NULL)
     {
         return NULL;
     }

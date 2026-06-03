@@ -47,7 +47,6 @@ extern LIBRARY_EXPORT void list_double_linked_insert(list_double_linked_t* lptr,
 
 extern LIBRARY_EXPORT void list_double_linked_remove_from_head(list_double_linked_t* lptr);
 extern LIBRARY_EXPORT void list_double_linked_remove_from_tail(list_double_linked_t* lptr);
-extern LIBRARY_EXPORT void list_double_linked_remove(list_double_linked_t* lptr, const void* data);
 extern LIBRARY_EXPORT void list_double_linked_remove_at(list_double_linked_t* lptr, long pos);
 extern LIBRARY_EXPORT void list_double_linked_remove_value(list_double_linked_t* lptr, void* data, size_t sz);
 

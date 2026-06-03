@@ -30,6 +30,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <limits.h>
 
 static const char encodingtable[] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 								'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
@@ -45,6 +46,23 @@ static const int modulustable[] = { 0, 2, 1 };
 
 char *base64_encode(const unsigned char *data, unsigned long inputlength, char *encodedString, unsigned long *outputlength)
 {
+	if (outputlength == NULL)
+	{
+		return NULL;
+	}
+
+	if (data == NULL && inputlength > 0)
+	{
+		*outputlength = 0;
+		return NULL;
+	}
+
+	if (inputlength > ((unsigned long)-1 - 2) / 3)
+	{
+		*outputlength = 0;
+		return NULL;
+	}
+
 	*outputlength = 4 * ((inputlength + 2) / 3);
 
 	encodedString = (char*)calloc(1, (size_t)(*outputlength) + 1);
@@ -83,19 +101,34 @@ unsigned char *base64_decode(const char *encodedString, unsigned long inputlengt
 {
 	char decodingtable[256] = { 0 };
 
+	if (outputlength == NULL || encodedString == NULL)
+	{
+		return NULL;
+	}
+
+	if (inputlength == 0)
+	{
+		*outputlength = 0;
+		return (unsigned char*)calloc(1, 1);
+	}
+
 	for (int i = 0; i < 64; i++)
 	{
 		decodingtable[(unsigned char)encodingtable[i]] = i;
 	}
 
-    if (inputlength % 4 != 0) return NULL;
+	if (inputlength % 4 != 0)
+	{
+		*outputlength = 0;
+		return NULL;
+	}
 
 	*outputlength = inputlength / 4 * 3;
 
 	if (encodedString[inputlength - 1] == '=') (*outputlength)--;
 	if (encodedString[inputlength - 2] == '=') (*outputlength)--;
 
-	decodedData = (unsigned char*)calloc(1, *outputlength);
+	decodedData = (unsigned char*)calloc(1, *outputlength == 0 ? 1 : *outputlength);
 
 	if (decodedData == NULL)
 	{
@@ -105,10 +138,10 @@ unsigned char *base64_decode(const char *encodedString, unsigned long inputlengt
 
 	for (unsigned int i = 0, j = 0; i < inputlength;)
 	{
-		uint32_t sextet_a = encodedString[i] == '=' ? 0 & i++ : decodingtable[encodedString[i++]];
-		uint32_t sextet_b = encodedString[i] == '=' ? 0 & i++ : decodingtable[encodedString[i++]];
-		uint32_t sextet_c = encodedString[i] == '=' ? 0 & i++ : decodingtable[encodedString[i++]];
-		uint32_t sextet_d = encodedString[i] == '=' ? 0 & i++ : decodingtable[encodedString[i++]];
+		uint32_t sextet_a = encodedString[i] == '=' ? 0 & i++ : decodingtable[(unsigned char)encodedString[i++]];
+		uint32_t sextet_b = encodedString[i] == '=' ? 0 & i++ : decodingtable[(unsigned char)encodedString[i++]];
+		uint32_t sextet_c = encodedString[i] == '=' ? 0 & i++ : decodingtable[(unsigned char)encodedString[i++]];
+		uint32_t sextet_d = encodedString[i] == '=' ? 0 & i++ : decodingtable[(unsigned char)encodedString[i++]];
 
 		uint32_t triple = (sextet_a << 3 * 6)
 			+ (sextet_b << 2 * 6)

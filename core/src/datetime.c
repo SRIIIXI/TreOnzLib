@@ -52,7 +52,7 @@ char* date_time_get_default_string(char* ptr)
     time(&t);
     tmp = localtime(&t);
 
-    sprintf(buffer, "%04d%02d%02d%02d%02d%02d",
+	snprintf(buffer, sizeof(buffer), "%04d%02d%02d%02d%02d%02d",
              (tmp->tm_year+1900), (tmp->tm_mon+1),tmp->tm_mday,
              tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
 
@@ -76,10 +76,22 @@ date_time_t* date_time_allocate_default()
 {
 	date_time_t* retval = (date_time_t*)calloc(1, sizeof(date_time_t));
 
+	if(retval == NULL)
+	{
+		return NULL;
+	}
+
 	time_t t ;
     struct tm *tmp ;
     time(&t);
     tmp = localtime(&t);
+
+	if(tmp == NULL)
+	{
+		free(retval);
+		return NULL;
+	}
+
 	retval->timeinfo = *tmp;
 
 	return retval;
@@ -369,7 +381,17 @@ char* date_time_get_formatted_string(date_time_t* ptr, const char* strformat)
 	// Add AM/PM if needed
 	if(am_pm_needed)
 	{
-		strcat(temp_format, " %p");
+		size_t temp_len = strlen(temp_format);
+		const char* ampm = " %p";
+		size_t ampm_len = strlen(ampm);
+
+		if(temp_len + ampm_len >= sizeof(temp_format))
+		{
+			free(retval);
+			return NULL;
+		}
+
+		memcpy(temp_format + temp_len, ampm, ampm_len + 1);
 	}
 	
 	// Make a copy of timeinfo to avoid modification

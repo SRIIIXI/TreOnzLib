@@ -209,6 +209,13 @@ static char *parse_quoted_value(const char **p)
 static void node_add_attr(xml_node_t *node, char *name, char *value)
 {
     xml_attribute_t *a = (xml_attribute_t*)malloc(sizeof(xml_attribute_t));
+    if (!a)
+    {
+        free(name);
+        free(value);
+        return;
+    }
+
     a->name = name;
     a->value = value;
     a->next = node->attr;
@@ -250,6 +257,12 @@ static int parse_element(const char **p, xml_node_t *parent)
     if (!ename) return 0;
 
     xml_node_t *elem = node_new(XML_NODE_ELEMENT);
+    if (!elem)
+    {
+        free(ename);
+        return 0;
+    }
+
     elem->name = ename;
 
     if (!parse_attributes(p, elem))
@@ -300,6 +313,13 @@ static int parse_node(const char **p, xml_node_t *parent)
                 if (!end) return 0;
                 char *txt = xstrndup(*p + 4, end - (*p + 4));
                 xml_node_t *n = node_new(XML_NODE_COMMENT);
+                if (!txt || !n)
+                {
+                    free(txt);
+                    free_node(n);
+                    return 0;
+                }
+
                 n->text = txt;
                 node_append_child(parent, n);
                 *p = end + 3;
@@ -310,6 +330,13 @@ static int parse_node(const char **p, xml_node_t *parent)
                 if (!end) return 0;
                 char *txt = xstrndup(*p + 9, end - (*p + 9));
                 xml_node_t *n = node_new(XML_NODE_CDATA);
+                if (!txt || !n)
+                {
+                    free(txt);
+                    free_node(n);
+                    return 0;
+                }
+
                 n->text = txt;
                 node_append_child(parent, n);
                 *p = end + 3;
@@ -330,6 +357,10 @@ static int parse_node(const char **p, xml_node_t *parent)
             const char *start = *p;
             while (**p && **p != '<') (*p)++;
             char *raw = xstrndup(start, *p - start);
+            if (!raw)
+            {
+                return 0;
+            }
 
             int onlyws = 1;
             for (char *t = raw; *t; t++)
@@ -344,7 +375,20 @@ static int parse_node(const char **p, xml_node_t *parent)
             if (!onlyws)
             {
                 xml_node_t *n = node_new(XML_NODE_TEXT);
+                if (!n)
+                {
+                    free(raw);
+                    return 0;
+                }
+
                 n->text = unescape_entities(raw);
+                if (!n->text)
+                {
+                    free_node(n);
+                    free(raw);
+                    return 0;
+                }
+
                 node_append_child(parent, n);
             }
             free(raw);
@@ -363,6 +407,11 @@ xml_document_t *xml_parse_string(const char *input)
     if (!doc) return NULL;
 
     doc->root = node_new(XML_NODE_DOCUMENT);
+    if (!doc->root)
+    {
+        free(doc);
+        return NULL;
+    }
 
     if (strncmp(p, "<?xml", 5) == 0)
     {
@@ -383,9 +432,24 @@ static char *read_file_all(const char *path)
     FILE *f = fopen(path, "rb");
     if (!f) return NULL;
 
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0)
+    {
+        fclose(f);
+        return NULL;
+    }
+
     long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    if (sz < 0)
+    {
+        fclose(f);
+        return NULL;
+    }
+
+    if (fseek(f, 0, SEEK_SET) != 0)
+    {
+        fclose(f);
+        return NULL;
+    }
 
     char *buf = (char*)malloc(sz + 1);
     if (!buf)

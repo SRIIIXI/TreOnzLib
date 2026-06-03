@@ -120,9 +120,14 @@ void list_add_to_tail(list_t* lptr, void* data, size_t sz)
 
 void list_insert(list_t* lptr, void* data, size_t sz, long pos)
 {
-    if (lptr == NULL)
+    if (lptr == NULL || data == NULL || sz == 0)
     {
         return;
+    }
+
+    if (pos == LONG_MAX)
+    {
+        pos = lptr->count;
     }
 
     // Bounds check: pos must be between 0 and lptr->count (inclusive)
@@ -185,48 +190,16 @@ void list_remove_from_tail(list_t* lptr)
     list_remove_at(lptr, LONG_MAX);
 }
 
-void list_remove(list_t* lptr, const void *data)
-{
-    if (lptr == NULL || data == NULL)
-    {
-        return;
-    }
-
-    node_t *curptr = lptr->head;
-    node_t *prev = NULL;
-
-    while (curptr != NULL)
-    {
-        if (memcmp(data, curptr->data, curptr->size) == 0)
-        {
-            if (prev == NULL)
-            {
-                list_internal_remove_from_head(lptr);
-            }
-            else
-            {
-                prev->next = curptr->next;
-                if (curptr == lptr->tail)
-                {
-                    lptr->tail = prev;
-                }
-
-                free(curptr->data);
-                free(curptr);
-                lptr->count--;
-            }
-            break;
-        }
-        prev = curptr;
-        curptr = curptr->next;
-    }
-}
-
 void list_remove_at(list_t* lptr, long pos)
 {
     if (lptr == NULL || pos < 0)
     {
         return;
+    }
+
+    if (pos == LONG_MAX)
+    {
+        pos = lptr->count - 1;
     }
 
     if (pos > lptr->count - 1)
@@ -278,7 +251,7 @@ void list_remove_value(list_t* lptr, void* data, size_t sz)
 
     while (ptr != NULL)
     {
-        if (memcmp(ptr->data, data, ptr->size) == 0 && ptr->size == sz)
+        if (ptr->size == sz && memcmp(ptr->data, data, sz) == 0)
         {
             if (idx == 0)
             {
@@ -341,7 +314,7 @@ long list_index_of(list_t *lptr, const void *node)
 
 long list_index_of_value(list_t* lptr, void* data, size_t sz)
 {
-    if (lptr == NULL || data == NULL)
+    if (lptr == NULL || data == NULL || sz == 0)
     {
         return -1;
     }
@@ -352,7 +325,7 @@ long list_index_of_value(list_t* lptr, void* data, size_t sz)
 
     while (ptr != NULL)
     {
-        if (memcmp(ptr->data, data, ptr->size) == 0 && ptr->size == sz)
+        if (ptr->size == sz && memcmp(ptr->data, data, sz) == 0)
         {
             return idx;
         }
@@ -398,7 +371,6 @@ void* list_get_first(list_t* lptr, size_t* out_size)
     }
 
     lptr->iterator = lptr->head;
-    lptr->iterator->size = lptr->head->size; 
     if (out_size != NULL)
     {
         *out_size = lptr->iterator->size;
@@ -414,7 +386,6 @@ void* list_get_next(list_t* lptr, size_t* out_size)
     }
 
     lptr->iterator = lptr->iterator->next;
-    lptr->iterator->size = lptr->head->size; 
     if (out_size != NULL)
     {
         *out_size = lptr->iterator->size;
@@ -424,13 +395,12 @@ void* list_get_next(list_t* lptr, size_t* out_size)
 
 void* list_get_last(list_t* lptr, size_t* out_size)
 {
-    if(lptr == NULL)
+    if(lptr == NULL || lptr->tail == NULL)
     {
         return NULL;
     }
 
     lptr->iterator = lptr->tail;
-    lptr->iterator->size = lptr->head->size; 
     if (out_size != NULL)
     {
         *out_size = lptr->iterator->size;
