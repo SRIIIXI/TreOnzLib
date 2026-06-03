@@ -198,15 +198,23 @@ bool tcp_client_send_buffer(tcp_client_t* ptr, const buffer_t* data)
         return false;
     }
 
-    long len = buffer_get_size(data);
-	long sentsize =0;
+    const char* payload = buffer_get_data(data);
+    size_t len = buffer_get_size(data);
+    size_t sent_total = 0;
 
-    sentsize = send(ptr->socket, buffer_get_data(data), (int)len, (int)0);
+    while (sent_total < len)
+    {
+        ssize_t sent = send(ptr->socket, payload + sent_total, (int)(len - sent_total), 0);
 
-    if(sentsize == SOCKET_ERROR)
-	{
-		return false;
-	}
+        if (sent <= 0)
+		{
+            ptr->error_code = errno;
+            ptr->connected = false;
+			return false;
+		}
+
+        sent_total += (size_t)sent;
+    }
 
 	return true;
 }
@@ -223,15 +231,23 @@ bool tcp_client_send_string(tcp_client_t* ptr, const string_t* str)
         return  false;
     }
 
-    long len = string_get_length(str);
-	long sentsize =0;
+    const char* payload = string_c_str(str);
+    size_t len = string_get_length(str);
+    size_t sent_total = 0;
 
-    sentsize = send(ptr->socket, string_c_str(str), (int)len, (int)0);
+    while (sent_total < len)
+    {
+        ssize_t sent = send(ptr->socket, payload + sent_total, (int)(len - sent_total), 0);
 
-    if(sentsize == SOCKET_ERROR)
-	{
-		return false;
-	}
+        if (sent <= 0)
+		{
+            ptr->error_code = errno;
+            ptr->connected = false;
+			return false;
+		}
+
+        sent_total += (size_t)sent;
+    }
 
 	return true;
 }

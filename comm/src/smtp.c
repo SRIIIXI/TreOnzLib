@@ -35,6 +35,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <memory.h>
 #include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
 typedef struct smtp_t
 {
@@ -55,6 +59,111 @@ typedef struct smtp_t
 }smtp_t;
 
 char selfIp[16] = {0};
+
+static bool smtp_response_contains(const string_t* response, const char* token)
+{
+    if (response == NULL || token == NULL)
+    {
+        return false;
+    }
+
+    const char* raw = string_c_str(response);
+    return (raw != NULL && strstr(raw, token) != NULL);
+}
+
+static void smtp_get_rfc2822_date(char* out, size_t out_size)
+{
+    if (out == NULL || out_size == 0)
+    {
+        return;
+    }
+
+    time_t now = time(NULL);
+    struct tm local_tm;
+
+    if (now == (time_t)-1 || localtime_r(&now, &local_tm) == NULL)
+    {
+        out[0] = 0;
+        return;
+    }
+
+    if (strftime(out, out_size, "%a, %d %b %Y %H:%M:%S %z", &local_tm) == 0)
+    {
+        out[0] = 0;
+    }
+}
+
+static char* smtp_prepare_message_body(const char* plaintext_message)
+{
+    if (plaintext_message == NULL)
+    {
+        return NULL;
+    }
+
+    size_t in_len = strlen(plaintext_message);
+    size_t max_len = (in_len * 3) + 8;
+    char* out = (char*)calloc(1, max_len);
+
+    if (out == NULL)
+    {
+        return NULL;
+    }
+
+    size_t i = 0;
+    size_t o = 0;
+    bool line_start = true;
+
+    while (i < in_len)
+    {
+        char ch = plaintext_message[i];
+
+        if (line_start && ch == '.')
+        {
+            out[o++] = '.';
+        }
+
+        if (ch == '\r')
+        {
+            out[o++] = '\r';
+
+            if ((i + 1) < in_len && plaintext_message[i + 1] == '\n')
+            {
+                out[o++] = '\n';
+                i++;
+            }
+            else
+            {
+                out[o++] = '\n';
+            }
+
+            line_start = true;
+            i++;
+            continue;
+        }
+
+        if (ch == '\n')
+        {
+            out[o++] = '\r';
+            out[o++] = '\n';
+            line_start = true;
+            i++;
+            continue;
+        }
+
+        out[o++] = ch;
+        line_start = false;
+        i++;
+    }
+
+    if (o < 2 || out[o - 2] != '\r' || out[o - 1] != '\n')
+    {
+        out[o++] = '\r';
+        out[o++] = '\n';
+    }
+
+    out[o] = 0;
+    return out;
+}
 
 smtp_t* smtp_allocate(void)
 {
@@ -89,13 +198,13 @@ void smtp_free(smtp_t* ptr)
 
         if (ptr->email_header)
         {
-            free(ptr->email_header);
+            dictionary_free(ptr->email_header);
             ptr->email_header = NULL;
         }
 
         if (ptr->bearer)
         {
-            free(ptr->bearer);
+            tcp_client_free(ptr->bearer);
             ptr->bearer = NULL;
         }
 
@@ -111,15 +220,46 @@ void smtp_set_account_information(smtp_t* ptr, const char* hoststr, uint16_t por
         return;
     }   
 
-    strncpy(ptr->host, hoststr, 32);
+    if (hoststr != NULL)
+    {
+        strncpy(ptr->host, hoststr, 32);
+    }
+    else
+    {
+        ptr->host[0] = 0;
+    }
     ptr->host[32] = 0;
-    strncpy(ptr->username, usernamestr, 32);
+
+    if (usernamestr != NULL)
+    {
+        strncpy(ptr->username, usernamestr, 32);
+    }
+    else
+    {
+        ptr->username[0] = 0;
+    }
     ptr->username[32] = 0;
-    strncpy(ptr->password, passwordstr, 32);
+
+    if (passwordstr != NULL)
+    {
+        strncpy(ptr->password, passwordstr, 32);
+    }
+    else
+    {
+        ptr->password[0] = 0;
+    }
     ptr->password[32] = 0;
-    strncpy(ptr->emailid, emailid, 32);
+
+    if (emailid != NULL)
+    {
+        strncpy(ptr->emailid, emailid, 32);
+    }
+    else
+    {
+        ptr->emailid[0] = 0;
+    }
     ptr->emailid[32] = 0;
-    ptr->port = portstr;
+    ptr->port = (portstr == 0 ? 25 : portstr);
     ptr->securityType = sectype;
 }
 
@@ -130,10 +270,24 @@ bool smtp_connect(smtp_t* ptr)
         return false;
     }
 
+    if (ptr->host[0] == 0)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "SMTP host is empty");
+        return false;
+    }
+
+    if (ptr->bearer)
+    {
+        tcp_client_close_socket(ptr->bearer);
+        tcp_client_free(ptr->bearer);
+        ptr->bearer = NULL;
+    }
+
     // Initialize the responder (bearer) here based on securityType
     if (ptr->securityType == Ssl) 
     {
         //ptr->bearer = responder_ssl_allocate();
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "SSL mode is not supported");
         return false;
     } 
     else
@@ -178,9 +332,15 @@ bool smtp_connect(smtp_t* ptr)
         ptr->bearer = NULL;
         return false;
     }
-    else
+
+    if (!smtp_response_contains(rx_buffer, "220"))
     {
-        printf("%s\n", string_c_str(rx_buffer)); // For debugging
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Invalid SMTP greeting");
+        string_free(&rx_buffer);
+        tcp_client_close_socket(ptr->bearer);
+        tcp_client_free(ptr->bearer);
+        ptr->bearer = NULL;
+        return false;
     }
     
     string_free(&rx_buffer);
@@ -203,17 +363,32 @@ bool smtp_disconnect(smtp_t* ptr)
         return false;
     }
 
+    tcp_client_free(ptr->bearer);
+    ptr->bearer = NULL;
+
     return true;
 }
 
 bool smtp_send_helo(smtp_t* ptr)
 {
+    if (ptr == NULL || ptr->bearer == NULL)
+    {
+        return false;
+    }
+
     char tx_temp[128] = { 0 };
     string_t* tx_buffer = NULL;
 
-    sprintf(tx_temp, "EHLO %s\r\n", selfIp);
+    const char* helo_host = (selfIp[0] == 0 ? "localhost" : selfIp);
+    snprintf(tx_temp, sizeof(tx_temp), "EHLO %s\r\n", helo_host);
 
     tx_buffer = string_allocate(tx_temp);
+
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate EHLO buffer");
+        return false;
+    }
 
     if (!tcp_client_send_string(ptr->bearer, tx_buffer))
     {
@@ -228,6 +403,14 @@ bool smtp_send_helo(smtp_t* ptr)
     string_t* eof_response = string_allocate("250 ");
     string_t* tls_support = string_allocate("STARTTLS");
 
+    if (eof_response == NULL || tls_support == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate SMTP response tokens");
+        string_free(&eof_response);
+        string_free(&tls_support);
+        return false;
+    }
+
     while(true)
     {
         rx_buffer = tcp_client_receive_string_precise(ptr->bearer, "\r\n");
@@ -239,15 +422,11 @@ bool smtp_send_helo(smtp_t* ptr)
             string_free(&tls_support);
             return false;
         }
-        else
-        {
-            printf("%s\n", string_c_str(rx_buffer)); // For debugging
-        }
-
-        if(string_index_of_substr(rx_buffer, tls_support) >= 0)
+        if(tls_support != NULL && string_index_of_substr(rx_buffer, tls_support) >= 0)
         {
             ptr->start_tls = true;
             string_free(&tls_support);
+            tls_support = NULL;
         }
 
         if(string_index_of_substr(rx_buffer, eof_response) >= 0)
@@ -266,24 +445,45 @@ bool smtp_send_helo(smtp_t* ptr)
 
 void smtp_set_public_ip_address(smtp_t* ptr, const char* ip)
 {
+    (void)ptr;
     memset(selfIp, 0, sizeof(selfIp));
-    strncpy(selfIp, ip, 15);
+
+    if (ip != NULL)
+    {
+        strncpy(selfIp, ip, 15);
+    }
 }
 
 const char* smtp_get_account(smtp_t* ptr)
 {
-    return NULL;
+    if (ptr == NULL || ptr->username[0] == 0)
+    {
+        return NULL;
+    }
+
+    return ptr->username;
 }
 
 const char* smtp_get_error(smtp_t* ptr)
 {
-    return NULL;
+    if (ptr == NULL || ptr->errorStr[0] == 0)
+    {
+        return NULL;
+    }
+
+    return ptr->errorStr;
 }
 
 bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject, const char* plaintext_message )
 {
-    if(!ptr || !recipient || !subject || !plaintext_message)
+    if(!ptr || !ptr->bearer || !tcp_client_is_connected(ptr->bearer) || !recipient || !subject || !plaintext_message)
     {
+        return false;
+    }
+
+    if (ptr->emailid[0] == 0 && ptr->username[0] == 0)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Missing sender identity");
         return false;
     }
 
@@ -291,13 +491,21 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     string_t* rx_buffer = NULL;
     string_t* respcode = NULL;
 	char tx_temp[128] = { 0 };
+    char date_header[80] = { 0 };
+    char* prepared_body = NULL;
 
     // Code for RCPT TO
 
 	memset(tx_temp, 0, sizeof(tx_temp));
-	sprintf(tx_temp, "MAIL FROM: <%s>\r\n", ptr->username);
+    snprintf(tx_temp, sizeof(tx_temp), "MAIL FROM: <%s>\r\n", (ptr->emailid[0] == 0 ? ptr->username : ptr->emailid));
 
     tx_buffer = string_allocate(tx_temp);
+
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate MAIL FROM");
+        return false;
+    }
 
     if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
     {
@@ -309,17 +517,24 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     tx_buffer = NULL;
 
     rx_buffer = NULL;
-    respcode = string_allocate("334");
+    respcode = string_allocate("250");
+
+    if (respcode == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate SMTP response code");
+        return false;
+    }
 
     rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
-    if (string_index_of_substr(rx_buffer, respcode) < 0) 
+    if (rx_buffer == NULL || string_index_of_substr(rx_buffer, respcode) < 0) 
     {
         snprintf(ptr->errorStr, sizeof(ptr->errorStr), "MAIL FROM not accepted");
         if (rx_buffer)
         {
             string_free(&rx_buffer);
         }
+        string_free(&respcode);
         return false;
     }
 
@@ -331,9 +546,15 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     // Code for RCPT TO
 
     memset(tx_temp, 0, sizeof(tx_temp));
-	sprintf(tx_temp, "RCPT TO: <%s>\r\n", recipient);
+    snprintf(tx_temp, sizeof(tx_temp), "RCPT TO: <%s>\r\n", recipient);
 
     tx_buffer = string_allocate(tx_temp);
+
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate RCPT TO");
+        return false;
+    }
 
     if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
     {
@@ -345,17 +566,24 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     tx_buffer = NULL;
 
     rx_buffer = NULL;
-    respcode = string_allocate("334");
+    respcode = string_allocate("250");
+
+    if (respcode == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate SMTP response code");
+        return false;
+    }
 
     rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
-    if (string_index_of_substr(rx_buffer, respcode) < 0) 
+    if (rx_buffer == NULL || string_index_of_substr(rx_buffer, respcode) < 0) 
     {
         snprintf(ptr->errorStr, sizeof(ptr->errorStr), "RCPT TO not accepted");
         if (rx_buffer)
         {
             string_free(&rx_buffer);
         }
+        string_free(&respcode);
         return false;
     }
 
@@ -369,13 +597,19 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
 
     // Code for DATA
     memset(tx_temp, 0, sizeof(tx_temp));
-	sprintf(tx_temp, "DATA");
+    snprintf(tx_temp, sizeof(tx_temp), "DATA\r\n");
 
     tx_buffer = string_allocate(tx_temp);
 
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate DATA command");
+        return false;
+    }
+
     if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
     {
-        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send RCPT TO");
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send DATA command");
         string_free(&tx_buffer);
         return false;
     }
@@ -385,15 +619,23 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     rx_buffer = NULL;
     respcode = string_allocate("354");
 
+    if (respcode == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate SMTP response code");
+        return false;
+    }
+
     rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
-    if (string_index_of_substr(rx_buffer, respcode) < 0) 
+    if (rx_buffer == NULL || string_index_of_substr(rx_buffer, respcode) < 0) 
     {
-        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "DATA not accepted");
+        const char* response = (rx_buffer == NULL ? "no response" : string_c_str(rx_buffer));
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "DATA not accepted: %.42s", (response == NULL ? "(null)" : response));
         if (rx_buffer)
         {
             string_free(&rx_buffer);
         }
+        string_free(&respcode);
         return false;
     }
 
@@ -403,31 +645,61 @@ bool smtp_sendmail_basic(smtp_t* ptr, const char* recipient, const char* subject
     respcode = NULL;
     // Code for DATA
 
+    prepared_body = smtp_prepare_message_body(plaintext_message);
+    if (prepared_body == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to prepare message body");
+        return false;
+    }
+
+    smtp_get_rfc2822_date(date_header, sizeof(date_header));
+
     // Code for sending actual message body
-    memset(tx_temp, 0, sizeof(tx_temp));
-    sprintf(tx_temp, "From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s\r\n.\r\n", ptr->emailid, recipient, subject, plaintext_message);
+    tx_buffer = string_allocate_formatted("From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s.\r\n",
+                                         (ptr->emailid[0] == 0 ? ptr->username : ptr->emailid),
+                                         recipient,
+                                         subject,
+                                         (date_header[0] == 0 ? "" : date_header),
+                                         prepared_body);
 
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate message body");
+        free(prepared_body);
+        return false;
+    }
 
-    tx_buffer = string_allocate(tx_temp);   
     if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
     {
         snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send message body");
         string_free(&tx_buffer);
+        free(prepared_body);
         return false;
     }
+    free(prepared_body);
+    prepared_body = NULL;
+
     string_free(&tx_buffer);
     tx_buffer = NULL;
     rx_buffer = NULL;
 
-    respcode = string_allocate("250");      
-    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
-    if (string_index_of_substr(rx_buffer, respcode) < 0)
+    respcode = string_allocate("250");
+    if (respcode == NULL)
     {
-        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Message body not accepted");
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate SMTP response code");
+        return false;
+    }
+
+    rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
+    if (rx_buffer == NULL || string_index_of_substr(rx_buffer, respcode) < 0)
+    {
+        const char* response = (rx_buffer == NULL ? "no response" : string_c_str(rx_buffer));
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Message rejected: %.45s", (response == NULL ? "(null)" : response));
         if (rx_buffer)
         {
             string_free(&rx_buffer);
         }
+        string_free(&respcode);
         return false;
     }   
     string_free(&rx_buffer);
@@ -530,6 +802,46 @@ bool smtp_sendmail(smtp_t* ptr, const mail_t* mail)
 
 bool smtp_start_tls(smtp_t* ptr)
 {
+    if (ptr == NULL || ptr->bearer == NULL)
+    {
+        return false;
+    }
+
+    char tx_temp[32] = { 0 };
+    snprintf(tx_temp, sizeof(tx_temp), "STARTTLS\r\n");
+
+    string_t* tx_buffer = string_allocate(tx_temp);
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate STARTTLS command");
+        return false;
+    }
+
+    if (!tcp_client_send_string(ptr->bearer, tx_buffer))
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send STARTTLS");
+        string_free(&tx_buffer);
+        return false;
+    }
+    string_free(&tx_buffer);
+
+    string_t* rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
+    if (rx_buffer == NULL || !smtp_response_contains(rx_buffer, "220"))
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "STARTTLS rejected");
+        string_free(&rx_buffer);
+        return false;
+    }
+
+    string_free(&rx_buffer);
+
+    if (!tcp_client_switch_to_tls(ptr->bearer))
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to switch to TLS mode");
+        return false;
+    }
+
+    ptr->start_tls = false;
     return true;
 
 //	std::string resp;
@@ -578,6 +890,12 @@ bool smtp_login(smtp_t* ptr)
         return false;
     }
 
+    if (ptr->username[0] == 0 || ptr->password[0] == 0)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Missing username or password");
+        return false;
+    }
+
     string_t* rx_buffer = NULL;
     string_t* respcode = NULL;
     string_t* tx_buffer = NULL;
@@ -623,14 +941,26 @@ bool smtp_login(smtp_t* ptr)
     rx_buffer = NULL;
 
     // Send base64(username)
-    char b64_buffer[64] = {0};
     unsigned long b64_outlen = 0;
 
     memset(tx_temp, 0, sizeof(tx_temp));
-    b64_ptr = base64_encode((const unsigned char*)ptr->username, strlen(ptr->username), b64_buffer, &b64_outlen);
-    strcpy(b64_buffer, b64_ptr);
-    snprintf(tx_temp, sizeof(tx_temp), "%s\r\n", b64_buffer);
+    b64_ptr = base64_encode((const unsigned char*)ptr->username, strlen(ptr->username), NULL, &b64_outlen);
+    if (b64_ptr == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to encode username");
+        return false;
+    }
+
+    snprintf(tx_temp, sizeof(tx_temp), "%s\r\n", b64_ptr);
     tx_buffer = string_allocate(tx_temp);
+
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate username payload");
+        free(b64_ptr);
+        return false;
+    }
+
     free(b64_ptr);
 
     if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
@@ -664,14 +994,26 @@ bool smtp_login(smtp_t* ptr)
     rx_buffer = NULL;
 
     // Send base64(password)
-    memset(b64_buffer, 0, sizeof(b64_buffer));
     memset(tx_temp, 0, sizeof(tx_temp));
     b64_outlen = 0;
 
-    b64_ptr = base64_encode((const unsigned char*)ptr->password, strlen(ptr->password), b64_buffer, &b64_outlen);
-    strcpy(b64_buffer, b64_ptr);
-    snprintf(tx_temp, sizeof(tx_temp), "%s\r\n", b64_buffer);
+    b64_ptr = base64_encode((const unsigned char*)ptr->password, strlen(ptr->password), NULL, &b64_outlen);
+    if (b64_ptr == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to encode password");
+        return false;
+    }
+
+    snprintf(tx_temp, sizeof(tx_temp), "%s\r\n", b64_ptr);
     tx_buffer = string_allocate(tx_temp);
+
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate password payload");
+        free(b64_ptr);
+        return false;
+    }
+
     free(b64_ptr);
 
     if (!tcp_client_send_string(ptr->bearer, tx_buffer)) 
@@ -711,24 +1053,50 @@ bool smtp_login(smtp_t* ptr)
 
 bool smtp_logout(smtp_t* ptr)
 {
-    if( ptr == NULL)
+    if( ptr == NULL || ptr->bearer == NULL)
     {
         return false;
     }   
 
 	char tx_temp[128] = { 0 };
-	sprintf(tx_temp, "QUIT\r\n");
+	snprintf(tx_temp, sizeof(tx_temp), "QUIT\r\n");
 
     string_t* tx_buffer = string_allocate(tx_temp);
 
-    tcp_client_send_string(ptr->bearer, tx_buffer);
+    if (tx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate QUIT command");
+        return false;
+    }
+
+    if (!tcp_client_send_string(ptr->bearer, tx_buffer))
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to send QUIT");
+        string_free(&tx_buffer);
+        return false;
+    }
 
     string_t* rx_buffer = NULL; 
     rx_buffer = tcp_client_receive_string_chunked(ptr->bearer, "\r\n");
 
+    if (rx_buffer == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "No response to QUIT");
+        string_free(&tx_buffer);
+        return false;
+    }
+
     string_t *resp = NULL;
 
     resp = string_allocate("221");
+
+    if (resp == NULL)
+    {
+        snprintf(ptr->errorStr, sizeof(ptr->errorStr), "Failed to allocate SMTP response code");
+        string_free(&tx_buffer);
+        string_free(&rx_buffer);
+        return false;
+    }
 
     //Check if the response contains "221"
     if(string_index_of_substr(rx_buffer, resp) < 0)
@@ -855,7 +1223,13 @@ bool smtp_resolve_public_ip_address()
     }
 
     memset(selfIp, 0, 16);
-    strncpy(selfIp, buffer_get_data(rx_buffer), buffer_get_size(rx_buffer));
+    size_t copy_len = buffer_get_size(rx_buffer);
+    if (copy_len > (sizeof(selfIp) - 1))
+    {
+        copy_len = sizeof(selfIp) - 1;
+    }
+
+    strncpy(selfIp, buffer_get_data(rx_buffer), copy_len);
 
     tcp_client_close_socket(http_client);
     tcp_client_free(http_client);
