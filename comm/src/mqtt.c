@@ -55,6 +55,8 @@ typedef struct mqtt_subscription_t
 struct mqtt_client_t
 {
     string_t* client_id;
+    string_t* username;
+    string_t* password;
     tcp_client_t* tcp;
     int keepalive;
     bool connected;
@@ -83,7 +85,7 @@ static size_t mqtt_encode_remaining_length(uint8_t* buffer, size_t length)
 }
 
 /* Build CONNECT packet */
-static buffer_t* mqtt_build_connect_packet(const string_t* client_id, int keepalive)
+static buffer_t* mqtt_build_connect_packet(const string_t* client_id, const string_t* username, const string_t* password, int keepalive)
 {
     if (client_id == NULL)
     {
@@ -99,6 +101,19 @@ static buffer_t* mqtt_build_connect_packet(const string_t* client_id, int keepal
     const char* protocol_name = "MQTT";
     uint8_t protocol_level = 4; /* MQTT 3.1.1 */
     uint8_t connect_flags = 0x02; /* Clean session */
+    bool has_username = (username != NULL && string_get_length((string_t*)username) > 0);
+    bool has_password = (password != NULL && string_get_length((string_t*)password) > 0);
+
+    if (has_username)
+    {
+        connect_flags |= 0x80;
+    }
+
+    if (has_password)
+    {
+        connect_flags |= 0x40;
+    }
+
     uint16_t ka = (uint16_t)keepalive;
 
     buffer_append(buf, "\x00\x04", 2); /* Protocol Name length */
@@ -113,6 +128,22 @@ static buffer_t* mqtt_build_connect_packet(const string_t* client_id, int keepal
     uint8_t cid_bytes[2] = { (uint8_t)(client_id_len >> 8), (uint8_t)(client_id_len & 0xFF) };
     buffer_append(buf, cid_bytes, 2);
     buffer_append(buf, string_c_str(client_id), client_id_len);
+
+    if (has_username)
+    {
+        uint16_t username_len = (uint16_t)string_get_length((string_t*)username);
+        uint8_t username_bytes[2] = { (uint8_t)(username_len >> 8), (uint8_t)(username_len & 0xFF) };
+        buffer_append(buf, username_bytes, 2);
+        buffer_append(buf, string_c_str((string_t*)username), username_len);
+    }
+
+    if (has_password)
+    {
+        uint16_t password_len = (uint16_t)string_get_length((string_t*)password);
+        uint8_t password_bytes[2] = { (uint8_t)(password_len >> 8), (uint8_t)(password_len & 0xFF) };
+        buffer_append(buf, password_bytes, 2);
+        buffer_append(buf, string_c_str((string_t*)password), password_len);
+    }
 
     /* Fixed Header */
     size_t remaining_len = buffer_get_size(buf);
@@ -207,8 +238,24 @@ static buffer_t* mqtt_build_subscribe_packet(uint16_t packet_id, const char* top
 
 static mqtt_subscription_t* mqtt_add_subscription(mqtt_client_t* client, const char* topic, mqtt_message_callback_t cb, void* userdata)
 {
+    if (!client || !topic || !cb)
+    {
+        return NULL;
+    }
+
     mqtt_subscription_t* sub = (mqtt_subscription_t*)malloc(sizeof(mqtt_subscription_t));
+    if (!sub)
+    {
+        return NULL;
+    }
+
     sub->topic = string_allocate(topic);
+    if (!sub->topic)
+    {
+        free(sub);
+        return NULL;
+    }
+
     sub->callback = cb;
     sub->userdata = userdata;
     sub->next = client->subscription_head;
@@ -247,11 +294,34 @@ static void mqtt_remove_subscription(mqtt_client_t* client, const char* topic)
 mqtt_client_t* mqtt_client_allocate(const char* client_id)
 {
     mqtt_client_t* client = (mqtt_client_t*)malloc(sizeof(mqtt_client_t));
+    if (!client)
+    {
+        return NULL;
+    }
+
     client->client_id = string_allocate(client_id);
+    client->username = NULL;
+    client->password = NULL;
     client->tcp = tcp_client_allocate();
+    if (!client->client_id || !client->tcp)
+    {
+        if (client->tcp)
+        {
+            tcp_client_free(client->tcp);
+        }
+        if (client->client_id)
+        {
+            string_free(&client->client_id);
+        }
+        free(client);
+        return NULL;
+    }
+
     client->keepalive = 60;
     client->connected = false;
     client->subscription_head = NULL;
+    client->next_packet_id = 1;
+    client->pending = NULL;
     return client;
 }
 
@@ -265,6 +335,8 @@ void mqtt_client_free(mqtt_client_t** client)
     mqtt_client_t* ptr = *client;
     if (ptr->tcp) tcp_client_free(ptr->tcp);
     if (ptr->client_id) string_free(&ptr->client_id);
+    if (ptr->username) string_free(&ptr->username);
+    if (ptr->password) string_free(&ptr->password);
 
     mqtt_subscription_t* sub = ptr->subscription_head;
     while (sub)
@@ -273,6 +345,19 @@ void mqtt_client_free(mqtt_client_t** client)
         string_free(&sub->topic);
         free(sub);
         sub = next;
+    }
+
+    mqtt_pending_pub_t* pending = ptr->pending;
+    while (pending)
+    {
+        mqtt_pending_pub_t* next = pending->next;
+        if (pending->payload)
+        {
+            buffer_free(&pending->payload);
+        }
+        free(pending->topic);
+        free(pending);
+        pending = next;
     }
 
     free(ptr);
@@ -290,7 +375,7 @@ bool mqtt_client_connect(mqtt_client_t* client, const char* host, int port, bool
     if (!tcp_client_connect_socket(client->tcp)) return false;
     if (use_tls && !tcp_client_switch_to_tls(client->tcp)) return false;
 
-    buffer_t* packet = mqtt_build_connect_packet(client->client_id, client->keepalive);
+    buffer_t* packet = mqtt_build_connect_packet(client->client_id, client->username, client->password, client->keepalive);
     if (!packet) return false;
 
     bool sent = tcp_client_send_buffer(client->tcp, packet);
@@ -333,6 +418,87 @@ bool mqtt_client_is_connected(mqtt_client_t* client)
     return client && client->connected && tcp_client_is_connected(client->tcp);
 }
 
+bool mqtt_client_set_client_id(mqtt_client_t* client, const char* client_id)
+{
+    if (!client || !client_id || client_id[0] == 0)
+    {
+        return false;
+    }
+
+    string_t* next_id = string_allocate(client_id);
+    if (!next_id)
+    {
+        return false;
+    }
+
+    if (client->client_id)
+    {
+        string_free(&client->client_id);
+    }
+    client->client_id = next_id;
+    return true;
+}
+
+bool mqtt_client_set_username(mqtt_client_t* client, const char* username)
+{
+    if (!client || !username || username[0] == 0)
+    {
+        return false;
+    }
+
+    string_t* next_user = string_allocate(username);
+    if (!next_user)
+    {
+        return false;
+    }
+
+    if (client->username)
+    {
+        string_free(&client->username);
+    }
+    client->username = next_user;
+    return true;
+}
+
+bool mqtt_client_set_password(mqtt_client_t* client, const char* password)
+{
+    if (!client || !password || password[0] == 0)
+    {
+        return false;
+    }
+
+    string_t* next_password = string_allocate(password);
+    if (!next_password)
+    {
+        return false;
+    }
+
+    if (client->password)
+    {
+        string_free(&client->password);
+    }
+    client->password = next_password;
+    return true;
+}
+
+void mqtt_client_clear_credentials(mqtt_client_t* client)
+{
+    if (!client)
+    {
+        return;
+    }
+
+    if (client->username)
+    {
+        string_free(&client->username);
+    }
+
+    if (client->password)
+    {
+        string_free(&client->password);
+    }
+}
+
 /* ======================== Publish/Subscribe ======================== */
 
 bool mqtt_client_publish(mqtt_client_t* client, const char* topic, const buffer_t* payload, uint8_t qos, bool retain)
@@ -357,14 +523,36 @@ bool mqtt_client_publish(mqtt_client_t* client, const char* topic, const buffer_
     if (qos == 1)
     {
         mqtt_pending_pub_t* pub = (mqtt_pending_pub_t*)malloc(sizeof(mqtt_pending_pub_t));
+        if (!pub)
+        {
+            return false;
+        }
+
         pub->packet_id = pid;
+        pub->payload = NULL;
+        pub->topic = NULL;
+        pub->next = NULL;
+        pub->last_sent = time(NULL);
 
         /* Allocate a new buffer of the same size */
         size_t payload_size = buffer_get_size((buffer_t*)payload);
         pub->payload = buffer_allocate_length(payload_size);
+        if (!pub->payload)
+        {
+            free(pub);
+            return false;
+        }
+
         buffer_append(pub->payload, buffer_get_data((buffer_t*)payload), payload_size);
 
         pub->topic = strdup(topic);
+        if (!pub->topic)
+        {
+            buffer_free(&pub->payload);
+            free(pub);
+            return false;
+        }
+
         pub->next = client->pending;
         client->pending = pub;
     }
@@ -376,7 +564,10 @@ bool mqtt_client_subscribe(mqtt_client_t* client, const char* topic, mqtt_messag
 {
     if (!client || !client->connected || !topic || !callback) return false;
 
-    mqtt_add_subscription(client, topic, callback, userdata);
+    if (!mqtt_add_subscription(client, topic, callback, userdata))
+    {
+        return false;
+    }
 
     static uint16_t packet_id = 1;
     buffer_t* packet = mqtt_build_subscribe_packet(packet_id++, topic);
@@ -460,16 +651,39 @@ void mqtt_client_loop(mqtt_client_t* client, int timeout_ms)
             if (!payload_buf) return;
 
             const uint8_t* p_data = (const uint8_t*)buffer_get_data(payload_buf);
+            if (remaining_len < 2)
+            {
+                buffer_free(&payload_buf);
+                return;
+            }
+
             uint16_t topic_len = (p_data[0] << 8) | p_data[1];
-            char topic_name[256];
+            if ((size_t)topic_len + 2 > remaining_len)
+            {
+                buffer_free(&payload_buf);
+                return;
+            }
+
+            char* topic_name = (char*)calloc(1, (size_t)topic_len + 1);
+            if (!topic_name)
+            {
+                buffer_free(&payload_buf);
+                return;
+            }
+
             memcpy(topic_name, p_data + 2, topic_len);
             topic_name[topic_len] = 0;
 
             size_t payload_offset = 2 + topic_len;
-            uint16_t packet_id = 0;
             if ((data[0] & 0x06) >> 1 == 1) /* QoS 1 */
             {
-                packet_id = (p_data[payload_offset] << 8) | p_data[payload_offset + 1];
+                if (payload_offset + 2 > remaining_len)
+                {
+                    free(topic_name);
+                    buffer_free(&payload_buf);
+                    return;
+                }
+
                 payload_offset += 2;
 
                 /* Send PUBACK */
@@ -478,6 +692,13 @@ void mqtt_client_loop(mqtt_client_t* client, int timeout_ms)
                 buffer_append(ack_buf, puback, 4);
                 tcp_client_send_buffer(client->tcp, ack_buf);
                 buffer_free(&ack_buf);
+            }
+
+            if (payload_offset > remaining_len)
+            {
+                free(topic_name);
+                buffer_free(&payload_buf);
+                return;
             }
 
             size_t message_len = remaining_len - payload_offset;
@@ -489,17 +710,27 @@ void mqtt_client_loop(mqtt_client_t* client, int timeout_ms)
                 if (strcmp(string_c_str(sub->topic), topic_name) == 0)
                 {
                     buffer_t* msg_buf = buffer_allocate_length(message_len);
-                    buffer_append(msg_buf, message, message_len);
-                    sub->callback(sub->topic, msg_buf, sub->userdata);
-                    buffer_free(&msg_buf);
+                    if (msg_buf)
+                    {
+                        buffer_append(msg_buf, message, message_len);
+                        sub->callback(sub->topic, msg_buf, sub->userdata);
+                        buffer_free(&msg_buf);
+                    }
                 }
                 sub = sub->next;
             }
 
+            free(topic_name);
             buffer_free(&payload_buf);
         }
         else if (packet_type == 4) /* PUBACK */
         {
+            if (buffer_get_size(incoming) < 4)
+            {
+                buffer_free(&incoming);
+                return;
+            }
+
             uint16_t ack_id = (data[2] << 8) | data[3];
             mqtt_pending_pub_t* prev = NULL;
             mqtt_pending_pub_t* curr = client->pending;

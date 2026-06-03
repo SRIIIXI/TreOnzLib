@@ -47,6 +47,12 @@ typedef void (*mqtt_message_callback_t)(const string_t* topic, const buffer_t* p
 extern LIBRARY_EXPORT mqtt_client_t* mqtt_client_allocate(const char* client_id);
 extern LIBRARY_EXPORT void mqtt_client_free(mqtt_client_t** client);
 
+/* Client identity / authentication */
+extern LIBRARY_EXPORT bool mqtt_client_set_client_id(mqtt_client_t* client, const char* client_id);
+extern LIBRARY_EXPORT bool mqtt_client_set_username(mqtt_client_t* client, const char* username);
+extern LIBRARY_EXPORT bool mqtt_client_set_password(mqtt_client_t* client, const char* password);
+extern LIBRARY_EXPORT void mqtt_client_clear_credentials(mqtt_client_t* client);
+
 /* Connection */
 extern LIBRARY_EXPORT bool mqtt_client_connect(mqtt_client_t* client, const char* host, int port, bool use_tls, int keepalive_seconds);
 extern LIBRARY_EXPORT bool mqtt_client_disconnect(mqtt_client_t* client);
