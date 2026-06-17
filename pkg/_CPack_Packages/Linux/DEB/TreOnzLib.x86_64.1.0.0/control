@@ -1,0 +1,9 @@
+Architecture: amd64
+Description: TreOnzLib built using CMake
+Maintainer: Subrato Roy
+Package: treonzlib
+Priority: optional
+Section: devel
+Version: 0.1.1
+Installed-Size: 641
+

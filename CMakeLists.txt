@@ -195,8 +195,11 @@ set(CPACK_PACKAGE_FILE_NAME ${Project}.${CMAKE_SYSTEM_PROCESSOR}.${LIB_VERSION_M
 set(CPACK_PACKAGE_DESCRIPTION, "Core C Utilities for TREONZ Edge Framework")
 set(CPACK_GENERATOR "DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Subrato Roy")
-install(TARGETS ${Project}.core ${Project}.comm ${Project}.io DESTINATION local/lib)
-install(FILES ${HEADERS} DESTINATION local/include/TREONZLib)
+install(TARGETS ${Project}.core ${Project}.comm ${Project}.io DESTINATION local/lib/TreOnz)
+install(FILES ${HEADERS} DESTINATION local/include/TreOnz/core)
+install(FILES ${IO_HEADERS} DESTINATION local/include/TreOnz/io)
+install(FILES ${COMM_HEADERS} DESTINATION local/include/TreOnz/comm)
+
 include(CPack)
 
 
