@@ -1,4 +1,5 @@
 CMakePresets.json
+pkg/
 .vscode/
 .vs/
 *.*~
