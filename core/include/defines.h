@@ -33,9 +33,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	extern "C" {
 	#endif
 
-    #define LIBRARY_EXPORT __attribute__((visibility("default")))
+	#if defined(_FREEBSD) || defined(__linux__) || defined(__APPLE__) || defined(__unix__) || defined(__posix__) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__MINGW64__)
+	#define LIBRARY_EXPORT __attribute__((visibility("default")))
+	#else
+	#define LIBRARY_EXPORT
+	#endif
 
-    /*Common headers*/
+	/*Common headers*/
 	#include <stddef.h>
 	#include <stdint.h>
 	#include <stdbool.h>
