@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-set(Project TreOnzLib)
+set(Project TreOnz)
 project(${Project})
 
 set(LIB_VERSION_MAJOR 1)
